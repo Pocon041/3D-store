@@ -172,6 +172,10 @@ class TestProductsAPI:
         r = client.get("/api/products/zzz-no-such")
         assert r.status_code == 404
 
+    def test_delete_builtin_product_rejected(self, client):
+        r = client.delete("/api/products/damaged-helmet")
+        assert r.status_code == 400
+
 
 # ---------------- 静态资源可达性 ----------------
 class TestStaticAssets:

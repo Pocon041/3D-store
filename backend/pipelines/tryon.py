@@ -65,7 +65,10 @@ def run_tryon_job(
             return mock_pipeline.run_mock_tryon(job_id, person_path, garment_path)
         raise RuntimeError(f"未找到 CatVTON 目录：{config.CATVTON_DIR}")
 
-    if not command_exists("python"):
+    if config.USE_CONDA_WRAPPER:
+        if not command_exists("conda"):
+            raise RuntimeError("启用 USE_CONDA_WRAPPER 后需要 conda 命令在 PATH 中")
+    elif not command_exists("python"):
         raise RuntimeError("python 命令不在 PATH 中")
 
     result_path = out_dir / "result.png"
@@ -79,6 +82,7 @@ def run_tryon_job(
     )
 
     job_store.update_job(job_id, stage="run_catvton", progress=0.6)
+    job_store.append_log(job_id, "[catvton] start single-image virtual try-on")
     log_path = _job_log_path(job_id)
     try:
         run_command(cmd, cwd=str(config.CATVTON_DIR), log_path=log_path)
@@ -89,7 +93,13 @@ def run_tryon_job(
     if not result_path.exists():
         raise RuntimeError("CatVTON 未生成结果图，请检查日志")
 
+    compare_path = out_dir / "compare.png"
     preview_url = f"{config.STATIC_URL_PREFIX}/jobs/{job_id}/tryon/result.png"
+    compare_url = (
+        f"{config.STATIC_URL_PREFIX}/jobs/{job_id}/tryon/compare.png"
+        if compare_path.exists()
+        else None
+    )
     job_store.update_job(
         job_id,
         status="success",
@@ -99,11 +109,16 @@ def run_tryon_job(
             "tryon_person": str(person_target),
             "tryon_garment": str(garment_target),
             "tryon_result": str(result_path),
+            "tryon_compare": str(compare_path) if compare_path.exists() else None,
             "preview_url": preview_url,
         },
     )
     job_store.append_log(job_id, "[catvton] finished")
-    return {"result": str(result_path), "preview_url": preview_url}
+    return {
+        "result": str(result_path),
+        "preview_url": preview_url,
+        "compare_url": compare_url,
+    }
 
 
 def _main() -> None:

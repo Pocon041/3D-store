@@ -155,6 +155,23 @@ def api_get_product(product_id: str):
     return p
 
 
+@app.delete("/api/products/{product_id}")
+def api_delete_product(product_id: str):
+    """删除用户自定义商品；内置 / Poly Haven 商品不可删除。"""
+    p = products.get_product(product_id)
+    if p is None:
+        raise HTTPException(status_code=404, detail="product not found")
+    if p.get("source") != "user":
+        raise HTTPException(status_code=400, detail="only user products can be deleted")
+    if not products.delete_user_product(product_id):
+        raise HTTPException(status_code=404, detail="product not found")
+    return {
+        "deleted": True,
+        "product_id": product_id,
+        "job_id": p.get("job_id"),
+    }
+
+
 class PublishPayload(BaseModel):
     name: Optional[str] = None
     price: Optional[float] = None

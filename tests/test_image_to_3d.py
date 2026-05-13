@@ -214,6 +214,18 @@ class TestPublish:
         assert p2["category"] == "collectibles"
         assert p2["stock"] == 50
 
+        # 5) 删除自定义商品后，商城列表和详情都不再暴露它
+        dr = client.delete(f"/api/products/job-{job_id}")
+        assert dr.status_code == 200, dr.text
+        assert dr.json()["deleted"] is True
+
+        gone = client.get(f"/api/products/job-{job_id}")
+        assert gone.status_code == 404
+
+        all_after_delete = client.get("/api/products").json()
+        ids_after_delete = {p["id"] for p in all_after_delete["items"]}
+        assert f"job-{job_id}" not in ids_after_delete
+
     def test_publish_nonexistent_job(self, client):
         r = client.post("/api/products/publish/no-such-job", json={})
         assert r.status_code == 404

@@ -19,7 +19,7 @@ function FallbackThumb({ name }) {
   );
 }
 
-export default function ProductCard({ product }) {
+export default function ProductCard({ product, onDelete, deleting = false }) {
   const [imgFailed, setImgFailed] = useState(false);
   const showImg = product.thumbnail_url && !imgFailed;
   const sourceLabel = product.source === "user"
@@ -27,6 +27,7 @@ export default function ProductCard({ product }) {
     : product.model_local
       ? "本地资产"
       : "3D 资产";
+  const canDelete = product.source === "user" && onDelete;
 
   return (
     <article
@@ -53,6 +54,20 @@ export default function ProductCard({ product }) {
         <span className={`source-badge ${product.source === "user" ? "user" : product.model_local ? "local" : ""}`}>
           {sourceLabel}
         </span>
+        {canDelete && (
+          <button
+            className="product-delete-btn"
+            type="button"
+            title="删除自定义商品"
+            disabled={deleting}
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(product);
+            }}
+          >
+            {deleting ? "删除中" : "删除"}
+          </button>
+        )}
         {product.tryonable && <span className="source-badge tryon">可试穿</span>}
         <div className="product-thumb-overlay">查看 3D</div>
       </div>

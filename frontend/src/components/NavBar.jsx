@@ -5,6 +5,7 @@ import { navigate } from "../router.js";
 const LINKS = [
   { path: "/shop", label: "商城" },
   { path: "/tryon", label: "虚拟试穿" },
+  { path: "/avatar-tryon", label: "3D换装" },
   { path: "/studio", label: "工作台" },
   { path: "/cart", label: "购物车" },
 ];
@@ -24,6 +25,7 @@ export default function NavBar({ currentPath }) {
         <div className="nav-links">
           {LINKS.map((link) => {
             const active = currentPath === link.path
+              || currentPath.startsWith(`${link.path}?`)
               || (link.path === "/shop" && currentPath.startsWith("/shop/"));
             return (
               <a

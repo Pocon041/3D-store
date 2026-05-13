@@ -47,6 +47,37 @@ if (-not $NoEnvFile) {
     }
 }
 
+function Resolve-ProjectPath([string]$value) {
+    if ([string]::IsNullOrWhiteSpace($value)) { return $value }
+    if ([System.IO.Path]::IsPathRooted($value)) { return $value }
+    return (Join-Path $root $value)
+}
+
+function Set-CacheEnv([string]$name, [string]$defaultRelPath) {
+    $current = [Environment]::GetEnvironmentVariable($name, "Process")
+    if ([string]::IsNullOrWhiteSpace($current)) {
+        $resolved = Join-Path $root $defaultRelPath
+    } else {
+        $resolved = Resolve-ProjectPath $current
+    }
+    [Environment]::SetEnvironmentVariable($name, $resolved, "Process")
+    New-Item -ItemType Directory -Force -Path $resolved | Out-Null
+}
+
+# Keep model/package caches inside this repo instead of C:\Users\...\cache.
+Set-CacheEnv "XDG_CACHE_HOME"          ".cache"
+Set-CacheEnv "HF_HOME"                 ".cache\huggingface"
+Set-CacheEnv "HF_HUB_CACHE"            ".cache\huggingface\hub"
+Set-CacheEnv "HUGGINGFACE_HUB_CACHE"   ".cache\huggingface\hub"
+Set-CacheEnv "HF_DATASETS_CACHE"       ".cache\huggingface\datasets"
+Set-CacheEnv "TRANSFORMERS_CACHE"      ".cache\huggingface\transformers"
+Set-CacheEnv "DIFFUSERS_CACHE"         ".cache\huggingface\diffusers"
+Set-CacheEnv "TORCH_HOME"              ".cache\torch"
+Set-CacheEnv "PIP_CACHE_DIR"           ".cache\pip"
+Set-CacheEnv "NPM_CONFIG_CACHE"        ".cache\npm"
+Set-CacheEnv "MPLCONFIGDIR"            ".cache\matplotlib"
+Write-Host ("[env] cache root {0}" -f (Join-Path $root ".cache")) -ForegroundColor DarkGray
+
 $BackendHost  = if ($env:BACKEND_HOST)  { $env:BACKEND_HOST }  else { "127.0.0.1" }
 $BackendPort  = if ($env:BACKEND_PORT)  { $env:BACKEND_PORT }  else { "8000" }
 $FrontendPort = if ($env:FRONTEND_PORT) { $env:FRONTEND_PORT } else { "5173" }
@@ -56,14 +87,35 @@ if ($env:IMAGE3D_PROVIDER) {
     Write-Host ("[env] IMAGE3D_PROVIDER={0} ({1})" -f $env:IMAGE3D_PROVIDER, $tripoState) -ForegroundColor DarkGray
 }
 
+function Get-ListenPids([int]$port) {
+    $ids = @()
+    try {
+        Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue |
+            ForEach-Object {
+                if ($_.OwningProcess) { $ids += [int]$_.OwningProcess }
+            }
+    } catch {
+        # fall through to netstat fallback
+    }
+
+    if ($ids.Count -eq 0) {
+        netstat -ano | ForEach-Object {
+            if ($_ -match "^\s*TCP\s+\S+:$port\s+\S+\s+LISTENING\s+(\d+)\s*$") {
+                $ids += [int]$matches[1]
+            }
+        }
+    }
+    return $ids | Select-Object -Unique
+}
+
 function Test-PortListen([int]$port) {
-    $c = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue
-    return $null -ne $c
+    return @((Get-ListenPids $port)).Count -gt 0
 }
 
 function Stop-Port([int]$port) {
-    Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue |
-        ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }
+    Get-ListenPids $port | ForEach-Object {
+        Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue
+    }
 }
 
 if ($Restart) {

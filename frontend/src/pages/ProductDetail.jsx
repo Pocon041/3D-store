@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
-import { getProduct } from "../api.js";
-import { addToCart } from "../cart.js";
-import { navigate } from "../router.js";
+import { deleteProduct, getProduct } from "../api.js";
+import { addToCart, removeFromCart } from "../cart.js";
+import { goBack, navigate } from "../router.js";
 import Model3DPreview from "../components/Model3DPreview.jsx";
 
 function priceText(price) {
@@ -15,11 +15,13 @@ export default function ProductDetail({ productId }) {
   const [error, setError] = useState(null);
   const [qty, setQty] = useState(1);
   const [added, setAdded] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     setProduct(null);
     setError(null);
     setAdded(false);
+    setDeleting(false);
     setQty(1);
     getProduct(productId)
       .then(setProduct)
@@ -29,7 +31,7 @@ export default function ProductDetail({ productId }) {
   if (error) {
     return (
       <div className="page">
-        <button className="back-link" onClick={() => navigate("/shop")}>← 返回商城</button>
+        <button className="back-link" onClick={() => goBack("/shop")}>← 返回上一页</button>
         <div className="error-banner">{error}</div>
       </div>
     );
@@ -37,7 +39,7 @@ export default function ProductDetail({ productId }) {
   if (!product) {
     return (
       <div className="page">
-        <button className="back-link" onClick={() => navigate("/shop")}>← 返回商城</button>
+        <button className="back-link" onClick={() => goBack("/shop")}>← 返回上一页</button>
         <div className="loading">加载中…</div>
       </div>
     );
@@ -49,9 +51,26 @@ export default function ProductDetail({ productId }) {
     setTimeout(() => setAdded(false), 1500);
   };
 
+  const onDelete = async () => {
+    if (!product || product.source !== "user") return;
+    const ok = window.confirm(`确定删除「${product.name}」吗？\n删除后它会从商城和购物车中移除，生成任务文件仍会保留。`);
+    if (!ok) return;
+
+    setDeleting(true);
+    setError(null);
+    try {
+      await deleteProduct(product.id);
+      removeFromCart(product.id);
+      navigate("/shop");
+    } catch (e) {
+      setError(String(e));
+      setDeleting(false);
+    }
+  };
+
   return (
     <div className="page detail-page">
-      <button className="back-link" onClick={() => navigate("/shop")}>← 返回商城</button>
+      <button className="back-link" onClick={() => goBack("/shop")}>← 返回上一页</button>
 
       <div className="detail-layout">
         <div className="detail-viewer">
@@ -93,6 +112,17 @@ export default function ProductDetail({ productId }) {
             {product.tryonable && (
               <button className="btn-tryon" onClick={() => navigate("/tryon")}>
                 虚拟试穿这件
+              </button>
+            )}
+            <button
+              className="secondary"
+              onClick={() => navigate(`/avatar-tryon?product=${encodeURIComponent(product.id)}`)}
+            >
+              3D 人台预览
+            </button>
+            {product.source === "user" && (
+              <button className="btn-danger" onClick={onDelete} disabled={deleting}>
+                {deleting ? "删除中…" : "删除商品"}
               </button>
             )}
           </div>

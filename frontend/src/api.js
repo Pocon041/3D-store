@@ -89,6 +89,13 @@ export async function getProduct(productId) {
   return handle(resp);
 }
 
+export async function deleteProduct(productId) {
+  const resp = await fetch(`${BASE}/api/products/${encodeURIComponent(productId)}`, {
+    method: "DELETE",
+  });
+  return handle(resp);
+}
+
 export async function publishJobAsProduct(jobId, payload) {
   const resp = await fetch(`${BASE}/api/products/publish/${encodeURIComponent(jobId)}`, {
     method: "POST",

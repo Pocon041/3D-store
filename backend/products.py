@@ -346,6 +346,8 @@ def _user_assets_as_products() -> list[dict[str, Any]]:
             continue
         if record.status != "success":
             continue
+        if record.params.get("product_deleted"):
+            continue
         glb_abs = (
             record.outputs.optimized_glb
             or record.outputs.glb
@@ -459,6 +461,28 @@ def publish_job_as_product(
     job_store.update_job(job_id, params=new_params)
 
     return get_product(f"job-{job_id}")
+
+
+def delete_user_product(product_id: str) -> bool:
+    """从商城中移除用户自定义商品。
+
+    自定义商品由 job 记录派生，删除时只给 job.params 打标记，不直接删除
+    outputs 下的 GLB / 缩略图 / 日志，避免误删生成产物。
+    """
+    if not product_id.startswith("job-"):
+        return False
+    job_id = product_id.removeprefix("job-")
+    record = job_store.get_job(job_id)
+    if record is None:
+        return False
+    if record.task_type not in {"reconstruct", "image_to_3d"}:
+        return False
+
+    new_params = dict(record.params or {})
+    new_params["product_deleted"] = True
+    new_params["published"] = False
+    job_store.update_job(job_id, params=new_params)
+    return True
 
 
 def list_products() -> list[dict[str, Any]]:

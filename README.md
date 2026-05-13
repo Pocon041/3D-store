@@ -8,13 +8,14 @@
 - 3D 展示：基于 `<model-viewer>` 加载 GLB，支持旋转、缩放和商品详情预览。
 - 图生 3D：上传单张商品图，生成可展示的 GLB 资产；支持 mock / Tripo3D provider。
 - 多视角生 3D：按正面、背面、左侧、右侧上传 1-4 张图，前端以 2x2 四宫格展示素材，调用多视角生成任务。
+- 3D 假人换装台：Three.js 真实比例人台、服装几何预设、材质切换、体型调节、商城商品 GLB 叠穿和手动对齐。
 - 商家工作台：查看任务状态、预览结果、下载文件、将成功任务发布为商品。
 - 二维虚拟试穿：上传人像和服装图，支持 mock 或外部 CatVTON 管线。
 - 任务历史：保存最近任务、日志、指标和生成产物。
 
 ## 技术栈
 
-- 前端：Vite + React + `@google/model-viewer`
+- 前端：Vite + React + Three.js + `@google/model-viewer`
 - 后端：FastAPI + Pydantic + Uvicorn
 - 3D / 图像处理：trimesh、Pillow、OpenCV、NumPy
 - 可选真实管线：Tripo3D、Nerfstudio、COLMAP、FFmpeg、glTF Transform、CatVTON
@@ -65,10 +66,10 @@ cd ..
 Windows 推荐使用一键脚本：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts\start.ps1
+powershell -ExecutionPolicy Bypass -File scripts\start.ps1 -Restart
 ```
 
-脚本会启动后端 `http://127.0.0.1:8000` 和前端 `http://localhost:5173`，日志写入 `logs/`。停止服务：
+脚本会启动后端 `http://127.0.0.1:8000` 和前端 `http://localhost:5173`，日志写入 `logs/`，并把 Hugging Face / torch / pip / npm 等缓存导向项目内 `.cache/`。停止服务：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\stop.ps1
@@ -87,7 +88,13 @@ cd frontend
 npm run dev
 ```
 
-打开 `http://localhost:5173`，默认进入商城；商家工作台在 `http://localhost:5173/#/studio`。
+如需在当前终端里手动安装依赖，也可以先把缓存环境变量写入当前会话：
+
+```powershell
+. .\scripts\cache_env.ps1
+```
+
+打开 `http://localhost:5173`，默认进入商城；商家工作台在 `http://localhost:5173/#/studio`，3D 假人换装台在 `http://localhost:5173/#/avatar-tryon`。
 
 ## 图生 3D Provider
 
@@ -147,6 +154,7 @@ external/CatVTON/
 | GET | `/api/health` | 后端健康检查 |
 | GET | `/api/products` | 商品列表、分类与搜索 |
 | GET | `/api/products/{product_id}` | 商品详情 |
+| DELETE | `/api/products/{product_id}` | 删除用户自定义商品 |
 | POST | `/api/products/publish/{job_id}` | 将成功的 3D 任务发布为商品 |
 | POST | `/api/image-to-3d` | 单图生成 3D |
 | POST | `/api/multiview-to-3d` | 多视角生成 3D |
@@ -179,7 +187,7 @@ npm run build
 
 ## 可选真实重建与试穿
 
-高级重建管线包装了 Nerfstudio + COLMAP + FFmpeg + glTF Transform，二维试穿可包装 CatVTON。完整环境配置见 `scripts/setup_env.md`。
+高级重建管线包装了 Nerfstudio + COLMAP + FFmpeg + glTF Transform，二维试穿可包装 CatVTON。重建环境配置见 `scripts/setup_env.md`，CatVTON 本地试穿配置见 `scripts/setup_catvton.md`。
 
 常用环境变量：
 

@@ -5,6 +5,7 @@ import ProductDetail from "./pages/ProductDetail.jsx";
 import Studio from "./pages/Studio.jsx";
 import Cart from "./pages/Cart.jsx";
 import TryOn from "./pages/TryOn.jsx";
+import AvatarTryOn from "./pages/AvatarTryOn.jsx";
 import { useHashRoute } from "./router.js";
 
 export default function App() {
@@ -20,6 +21,8 @@ export default function App() {
     page = <Studio />;
   } else if (path === "/tryon") {
     page = <TryOn />;
+  } else if (path.startsWith("/avatar-tryon")) {
+    page = <AvatarTryOn />;
   } else if (path === "/cart") {
     page = <Cart />;
   } else {

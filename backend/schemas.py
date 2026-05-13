@@ -54,6 +54,7 @@ class JobOutputs(BaseModel):
     optimized_glb: Optional[str] = None
     preview_url: Optional[str] = None
     tryon_result: Optional[str] = None
+    tryon_compare: Optional[str] = None
     tryon_person: Optional[str] = None
     tryon_garment: Optional[str] = None
     # 图生 3D 专有字段

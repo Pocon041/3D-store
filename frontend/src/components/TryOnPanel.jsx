@@ -14,6 +14,11 @@ export default function TryOnPanel() {
 
   const personPreview = personImage ? URL.createObjectURL(personImage) : null;
   const garmentPreview = garmentImage ? URL.createObjectURL(garmentImage) : null;
+  const resultUrl = result?.outputs?.preview_url
+    || (result?.outputs?.tryon_result ? `/static/jobs/${result.job_id}/tryon/result.png` : null);
+  const compareUrl = result?.outputs?.tryon_compare
+    ? `/static/jobs/${result.job_id}/tryon/compare.png`
+    : null;
 
   const onSubmit = async (e) => {
     e.preventDefault();
@@ -90,8 +95,16 @@ export default function TryOnPanel() {
         </div>
         <div>
           <div className="label">试穿结果</div>
-          {result?.outputs?.tryon_result || result?.outputs?.preview_url ? (
-            <img src={result.outputs.preview_url || `/static/jobs/${result.job_id}/tryon/result.png`} alt="result" />
+          {resultUrl ? (
+            <>
+              <img src={resultUrl} alt="result" />
+              <div className="job-result-actions" style={{ marginTop: 10 }}>
+                <a className="secondary" href={resultUrl} target="_blank" rel="noreferrer">打开结果</a>
+                {compareUrl && (
+                  <a className="secondary" href={compareUrl} target="_blank" rel="noreferrer">查看对比图</a>
+                )}
+              </div>
+            </>
           ) : (
             <div className="viewer-box" style={{ height: 240 }}>等待生成</div>
           )}

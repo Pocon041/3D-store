@@ -1,5 +1,6 @@
 import React from "react";
 import TryOnPanel from "../components/TryOnPanel.jsx";
+import { navigate } from "../router.js";
 
 export default function TryOn() {
   return (
@@ -9,6 +10,9 @@ export default function TryOn() {
           <h1>虚拟试穿</h1>
           <p>上传自己的照片和心仪的服装图，几秒内得到试穿效果。无需下载 App，纯网页推理。</p>
         </div>
+        <button className="secondary" onClick={() => navigate("/avatar-tryon")}>
+          打开 3D 假人换装台
+        </button>
       </header>
 
       <section className="section">

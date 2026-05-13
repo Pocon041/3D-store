@@ -25,12 +25,32 @@ function Stop-ByPidFile([string]$name, [string]$pidFile) {
     }
 }
 
+function Get-ListenPids([int]$port) {
+    $ids = @()
+    try {
+        Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue |
+            ForEach-Object {
+                if ($_.OwningProcess) { $ids += [int]$_.OwningProcess }
+            }
+    } catch {
+        # fall through to netstat fallback
+    }
+
+    if ($ids.Count -eq 0) {
+        netstat -ano | ForEach-Object {
+            if ($_ -match "^\s*TCP\s+\S+:$port\s+\S+\s+LISTENING\s+(\d+)\s*$") {
+                $ids += [int]$matches[1]
+            }
+        }
+    }
+    return $ids | Select-Object -Unique
+}
+
 function Stop-ByPort([string]$name, [int]$port) {
-    $cs = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue
-    foreach ($c in $cs) {
+    foreach ($procId in (Get-ListenPids $port)) {
         try {
-            Stop-Process -Id $c.OwningProcess -Force
-            Write-Host "[ok] stopped $name on port $port pid=$($c.OwningProcess)"
+            Stop-Process -Id $procId -Force
+            Write-Host "[ok] stopped $name on port $port pid=$procId"
         } catch {
             Write-Host "[warn] failed to stop $name on port $port : $_" -ForegroundColor Yellow
         }

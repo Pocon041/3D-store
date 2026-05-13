@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { listProducts } from "../api.js";
+import { deleteProduct, listProducts } from "../api.js";
 import ProductCard from "../components/ProductCard.jsx";
 import Model3DPreview from "../components/Model3DPreview.jsx";
 import { navigate } from "../router.js";
+import { removeFromCart } from "../cart.js";
 
 // 把所有商品一次拉回，分类与搜索都在前端内存里做，切换瞬时响应
 export default function Shop() {
@@ -12,6 +13,7 @@ export default function Shop() {
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [deletingIds, setDeletingIds] = useState(() => new Set());
 
   useEffect(() => {
     let cancelled = false;
@@ -26,6 +28,28 @@ export default function Shop() {
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, []);
+
+  const handleDeleteProduct = async (product) => {
+    if (!product || product.source !== "user") return;
+    const ok = window.confirm(`确定删除「${product.name}」吗？\n删除后它会从商城和购物车中移除，生成任务文件仍会保留。`);
+    if (!ok) return;
+
+    setDeletingIds((prev) => new Set(prev).add(product.id));
+    setError(null);
+    try {
+      await deleteProduct(product.id);
+      setAllItems((prev) => prev.filter((p) => p.id !== product.id));
+      removeFromCart(product.id);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setDeletingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(product.id);
+        return next;
+      });
+    }
+  };
 
   // 计算每个分类下的商品数，给 chip 显示徽标
   const categoryCounts = useMemo(() => {
@@ -176,7 +200,14 @@ export default function Shop() {
           </div>
         ) : (
           <div className="product-grid">
-            {filteredItems.map((p) => <ProductCard key={p.id} product={p} />)}
+            {filteredItems.map((p) => (
+              <ProductCard
+                key={p.id}
+                product={p}
+                deleting={deletingIds.has(p.id)}
+                onDelete={handleDeleteProduct}
+              />
+            ))}
             {filteredItems.length === 0 && (
               <div className="empty">
                 {query

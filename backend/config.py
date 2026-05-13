@@ -60,17 +60,52 @@ QUALITY_CONFIG = {
 FFMPEG_EXTRACT_VF = "fps=2,scale=1280:-1"
 
 # CatVTON 推理命令模板（占位符将在 tryon.py 中被替换）
-# 真实接入时请按 external/CatVTON 仓库的 inference 脚本实参对齐
+# 通过 scripts/run_catvton_single.py 包装 CatVTON Gradio app 的单图推理逻辑。
+CATVTON_WIDTH = int(os.environ.get("CATVTON_WIDTH", "768"))
+CATVTON_HEIGHT = int(os.environ.get("CATVTON_HEIGHT", "1024"))
+CATVTON_STEPS = int(os.environ.get("CATVTON_STEPS", "50"))
+CATVTON_GUIDANCE_SCALE = float(os.environ.get("CATVTON_GUIDANCE_SCALE", "2.5"))
+CATVTON_MIXED_PRECISION = os.environ.get("CATVTON_MIXED_PRECISION", "bf16")
+CATVTON_SEED = int(os.environ.get("CATVTON_SEED", "42"))
+CATVTON_ALLOW_TF32 = os.environ.get("CATVTON_ALLOW_TF32", "true").lower() == "true"
+CATVTON_SKIP_SAFETY_CHECK = os.environ.get("CATVTON_SKIP_SAFETY_CHECK", "true").lower() == "true"
+CATVTON_BASE_MODEL_PATH = os.environ.get("CATVTON_BASE_MODEL_PATH", "runwayml/stable-diffusion-inpainting")
+CATVTON_RESUME_PATH = os.environ.get("CATVTON_RESUME_PATH", "zhengchong/CatVTON")
+
 CATVTON_COMMAND_TEMPLATE = [
     "python",
-    "inference.py",
+    str(PROJECT_ROOT / "scripts" / "run_catvton_single.py"),
+    "--catvton-dir",
+    str(CATVTON_DIR),
     "--person",
     "{person_image}",
     "--cloth",
     "{garment_image}",
     "--output",
     "{output_image}",
+    "--category",
+    "{category}",
+    "--width",
+    str(CATVTON_WIDTH),
+    "--height",
+    str(CATVTON_HEIGHT),
+    "--steps",
+    str(CATVTON_STEPS),
+    "--guidance-scale",
+    str(CATVTON_GUIDANCE_SCALE),
+    "--seed",
+    str(CATVTON_SEED),
+    "--mixed-precision",
+    CATVTON_MIXED_PRECISION,
+    "--base-model-path",
+    CATVTON_BASE_MODEL_PATH,
+    "--resume-path",
+    CATVTON_RESUME_PATH,
 ]
+if CATVTON_ALLOW_TF32:
+    CATVTON_COMMAND_TEMPLATE.append("--allow-tf32")
+if CATVTON_SKIP_SAFETY_CHECK:
+    CATVTON_COMMAND_TEMPLATE.append("--skip-safety-check")
 
 # Nerfstudio 命令前缀（启用 conda 包装时使用）
 def _conda_run(env: str) -> list[str]:
