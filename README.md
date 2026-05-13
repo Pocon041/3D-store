@@ -1,160 +1,197 @@
-# AIGC 3D Commerce Demo
+# AIGC 3D Mall
 
-本地原型：多视角商品 3D 重建 + 二维虚拟试穿。后端 FastAPI，前端 Vite + React，3D 展示用 `<model-viewer>`。
-真实管线包装 Nerfstudio + COLMAP + FFmpeg + glTF Transform；试穿包装 CatVTON。所有真实工具都可缺省，对应任务可用 mock 模式跑通。
+面向“AI 与数字经济”课程期末作业的 3D 电商原型：用户可以浏览可旋转的 3D 商品，商家可以用单张商品图或 1-4 张多视角图生成 3D 资产，并把生成结果一键上架到商城。项目默认使用 mock 管线保证本地可跑通；配置 Tripo3D API Key 后可切换到真实图生 3D。
 
-## 目录
+## 当前功能
 
-```
+- 3D 商城：首页商品流、分类筛选、搜索、商品详情、购物车。
+- 3D 展示：基于 `<model-viewer>` 加载 GLB，支持旋转、缩放和商品详情预览。
+- 图生 3D：上传单张商品图，生成可展示的 GLB 资产；支持 mock / Tripo3D provider。
+- 多视角生 3D：按正面、背面、左侧、右侧上传 1-4 张图，前端以 2x2 四宫格展示素材，调用多视角生成任务。
+- 商家工作台：查看任务状态、预览结果、下载文件、将成功任务发布为商品。
+- 二维虚拟试穿：上传人像和服装图，支持 mock 或外部 CatVTON 管线。
+- 任务历史：保存最近任务、日志、指标和生成产物。
+
+## 技术栈
+
+- 前端：Vite + React + `@google/model-viewer`
+- 后端：FastAPI + Pydantic + Uvicorn
+- 3D / 图像处理：trimesh、Pillow、OpenCV、NumPy
+- 可选真实管线：Tripo3D、Nerfstudio、COLMAP、FFmpeg、glTF Transform、CatVTON
+
+## 项目结构
+
+```text
 aigc-3d-commerce-demo/
-├── backend/             FastAPI 后端
-├── frontend/            Vite + React 前端
-├── scripts/             启动脚本与命令样例
-├── external/            放置三方仓库（CatVTON 等）
-├── data/                输入数据
-├── outputs/             任务产物
-└── docs/                设计与实验文档
+├── backend/              FastAPI 接口、商品数据、任务管线
+├── frontend/             React 商城与商家工作台
+├── data/                 示例输入与本地商品资产
+├── docs/                 设计与实验文档
+├── external/             第三方仓库，例如 CatVTON
+├── outputs/              任务输出目录
+├── scripts/              启动、下载、环境配置脚本
+├── tests/                后端单元测试与 API 集成测试
+├── requirements.txt      Python 依赖
+└── README.md
 ```
 
-## 快速开始（mock 全链路）
-
-无需 GPU 也无需 Nerfstudio / CatVTON。
+## 快速开始
 
 ### 1. 安装后端依赖
 
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+```
+
+macOS / Linux:
+
 ```bash
 python -m venv .venv
-# Linux / macOS
 source .venv/bin/activate
-# Windows PowerShell
-# .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 ```
 
-### 2. 启动后端
+### 2. 安装前端依赖
 
-```bash
-bash scripts/run_backend.sh
-# 或 Windows
-powershell -File scripts/run_backend.ps1
+```powershell
+cd frontend
+npm install
+cd ..
 ```
 
-健康检查：
+### 3. 启动项目
 
-```bash
-curl http://localhost:8000/api/health
-# {"status":"ok","version":"0.1.0"}
+Windows 推荐使用一键脚本：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\start.ps1
 ```
 
-### 3. 启动前端
+脚本会启动后端 `http://127.0.0.1:8000` 和前端 `http://localhost:5173`，日志写入 `logs/`。停止服务：
 
-```bash
-bash scripts/run_frontend.sh
-# 或 Windows
-powershell -File scripts/run_frontend.ps1
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\stop.ps1
 ```
 
-打开 http://localhost:5173 ，勾选「mock 模式」，点击「开始重建」，几秒后 `<model-viewer>` 会显示一个立方体；试穿面板上传两张图也能立刻得到拼接的占位图。
+也可以手动启动：
 
-### 4. 命令行直接跑 mock
-
-```bash
-python -m backend.pipelines.reconstruct \
-  --job-id local_mock --input data/samples/product_images \
-  --mode images --quality fast --export-glb --mock
+```powershell
+.\.venv\Scripts\python.exe -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
 ```
 
-输出：`outputs/jobs/local_mock/exports/glb/model.optimized.glb` 与 `metrics.json`。
+另开一个终端：
 
-## 真实管线
-
-### 安装外部工具
-
-参见 `scripts/setup_env.md`。Linux 下：
-
-```bash
-sudo apt install -y ffmpeg colmap blender
-conda create -n nerfstudio python=3.10 -y
-conda activate nerfstudio
-pip install nerfstudio
-npm install -g @gltf-transform/cli
+```powershell
+cd frontend
+npm run dev
 ```
 
-CatVTON：
+打开 `http://localhost:5173`，默认进入商城；商家工作台在 `http://localhost:5173/#/studio`。
 
-```bash
-git clone https://github.com/Zheng-Chong/CatVTON external/CatVTON
+## 图生 3D Provider
+
+默认 provider 是 `mock`，不需要 API Key，会生成占位 GLB，适合课堂演示和本地开发。
+
+如需调用 Tripo3D，将 `scripts/.env.example` 复制为 `scripts/.env.local`，并填写：
+
+```powershell
+Copy-Item scripts\.env.example scripts\.env.local
 ```
 
-### 启动方式
-
-后端默认假设当前 shell 已经 `conda activate nerfstudio`。如果想让后端进程内部用 `conda run` 包装，设置：
-
-```bash
-export USE_CONDA_WRAPPER=true
+```dotenv
+IMAGE3D_PROVIDER=tripo
+TRIPO_API_KEY=你的 Tripo3D Bearer Token
+TRIPO_MODEL_VERSION=auto
 ```
 
-如果某些工具未装，但希望任务在缺工具时自动降级到 mock：
+再重新运行：
 
-```bash
-export ALLOW_MISSING_TOOLS_FALLBACK_TO_MOCK=true
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\start.ps1 -Restart
 ```
 
-### 触发真实重建
+说明：
 
-前端取消勾选「mock 模式」即可。或命令行：
+- 单图生 3D 使用 `/api/image-to-3d`。
+- 多视角生 3D 使用 `/api/multiview-to-3d`，上传顺序为正面、背面、左侧、右侧。
+- 如果 Tripo3D 任务已创建但本地拉取失败，可以通过 `/api/image-to-3d/resume` 用已有 task id 恢复下载。
 
-```bash
-python -m backend.pipelines.reconstruct \
-  --job-id real_demo --input data/samples/product_images \
-  --mode images --quality fast --export-glb
+## 示例资产与 Git
+
+仓库不会提交大体积或生成型 3D 文件，相关路径已写入 `.gitignore`：
+
+```text
+outputs/jobs/
+data/polyhaven_products.json
+data/samples/glb/
+data/samples/polyhaven/
+data/samples/thumb/
+data/samples/*.glb
+external/CatVTON/
 ```
 
-## 架构与任务状态
+克隆后即使没有这些文件，mock 流程和远程 Khronos 示例商品仍可运行。如需补充本地 3D 商品素材，可按需执行：
 
-参见 `docs/system_design.md`。任务状态文件统一在：
+```powershell
+.\.venv\Scripts\python.exe scripts\fetch_demo_models.py
+.\.venv\Scripts\python.exe scripts\fetch_polyhaven_models.py --count 84
+```
 
-```
-outputs/jobs/<job_id>/job.json    # 状态与输出路径
-outputs/jobs/<job_id>/job.log     # 命令日志
-outputs/jobs/<job_id>/metrics.json # 实验指标
-```
+这些脚本会下载模型和缩略图到 `data/samples/`，文件体积较大，不建议上传 GitHub。
 
 ## API 一览
 
 | 方法 | 路径 | 说明 |
-|------|------|------|
-| GET  | `/api/health` | 健康检查 |
-| POST | `/api/reconstruct` | 上传图片 / 视频，创建重建任务 |
-| POST | `/api/tryon` | 上传人像 + 服装图，创建试穿任务 |
-| GET  | `/api/jobs` | 任务列表 |
-| GET  | `/api/jobs/{job_id}` | 单任务状态 |
-| GET  | `/api/jobs/{job_id}/files` | 输出文件列表 |
-| GET  | `/api/metrics/{job_id}` | metrics.json |
-| GET  | `/static/jobs/...` | 输出目录直挂载 |
-| GET  | `/viewer?src=...` | 直接的 model-viewer 页面 |
+| --- | --- | --- |
+| GET | `/api/health` | 后端健康检查 |
+| GET | `/api/products` | 商品列表、分类与搜索 |
+| GET | `/api/products/{product_id}` | 商品详情 |
+| POST | `/api/products/publish/{job_id}` | 将成功的 3D 任务发布为商品 |
+| POST | `/api/image-to-3d` | 单图生成 3D |
+| POST | `/api/multiview-to-3d` | 多视角生成 3D |
+| GET | `/api/image-to-3d/providers` | 查询可用 provider |
+| POST | `/api/image-to-3d/resume` | 恢复 Tripo3D 已有任务 |
+| POST | `/api/reconstruct` | 高级 NeRF / 3DGS 重建入口 |
+| POST | `/api/tryon` | 虚拟试穿任务 |
+| GET | `/api/jobs` | 最近任务列表 |
+| GET | `/api/jobs/{job_id}` | 单个任务状态 |
+| GET | `/api/jobs/{job_id}/files` | 任务输出文件列表 |
+| GET | `/api/metrics/{job_id}` | 实验指标 |
+| GET | `/static/jobs/...` | 生成资产静态访问 |
+| GET | `/viewer?src=...` | 独立 3D 预览页 |
 
-## 常用命令
+## 常用检查
 
-参见 `scripts/sample_commands.md`。
+前端构建：
 
-## Gradio 备选
-
-如果 React 前端出问题：
-
-```bash
-python demo_gradio.py
+```powershell
+cd frontend
+npm run build
 ```
 
-会启动一个最小 Gradio 应用，复用相同的后端管线代码。
+后端测试：
 
-## 已知限制
+```powershell
+.\.venv\Scripts\python.exe -m pip install pytest
+.\.venv\Scripts\python.exe -m pytest tests -v
+```
 
-- 任务在 daemon 线程里执行，进程重启会丢失正在跑的任务。生产场景请换 Celery/RQ。
-- COLMAP 依赖图片有充分重叠，否则 `transforms.json` 不会生成。
-- `splatfacto` 在 CPU 上不可用，需要支持 CUDA 的 GPU。
-- `<model-viewer>` 加载 PLY 不如 GLB 稳定，方案保留两条展示路径。
+## 可选真实重建与试穿
 
-.venv\Scripts\python.exe -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 --no-access-log
+高级重建管线包装了 Nerfstudio + COLMAP + FFmpeg + glTF Transform，二维试穿可包装 CatVTON。完整环境配置见 `scripts/setup_env.md`。
 
-npm run dev
+常用环境变量：
+
+```dotenv
+USE_CONDA_WRAPPER=false
+NERFSTUDIO_CONDA_ENV=nerfstudio
+CATVTON_CONDA_ENV=catvton
+ALLOW_MISSING_TOOLS_FALLBACK_TO_MOCK=true
+```
+
+如果未安装真实工具，保持 mock 模式即可完成课堂演示。
+
+## 课程作业定位
+
+这个 Demo 展示的是“AI 生成式资产如何进入数字商品流通”的最小闭环：商品图片被转化为 3D 数字资产，资产进入电商货架，用户在浏览、试穿和交互预览中获得更接近真实商品的体验。它适合作为数字经济学课程中关于 AIGC、数字商品、平台供给效率和沉浸式消费的实验型展示。
