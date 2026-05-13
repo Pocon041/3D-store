@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>3D 资产预览</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="/static/assets/app.css" />
+  <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/4.0.0/model-viewer.min.js"></script>
+</head>
+<body>
+  <header>
+    <h1>3D 资产预览</h1>
+    <p>通过 URL 参数 <code>?src=/static/jobs/&lt;job_id&gt;/exports/glb/model.optimized.glb</code> 加载模型。</p>
+  </header>
+
+  <main>
+    <model-viewer
+      id="viewer"
+      camera-controls
+      auto-rotate
+      ar
+      shadow-intensity="1"
+      style="width:100%;height:80vh;background:#1a1a1a;">
+    </model-viewer>
+  </main>
+
+  <script>
+    const params = new URLSearchParams(location.search);
+    const src = params.get("src");
+    const viewer = document.getElementById("viewer");
+    if (src) {
+      viewer.setAttribute("src", src);
+    } else {
+      viewer.outerHTML = '<p style="padding:24px">未提供 src 参数，无法加载模型。</p>';
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+# 后端核心
+fastapi>=0.110
+uvicorn[standard]>=0.27
+pydantic>=2.6
+python-multipart>=0.0.9
+requests>=2.31
+
+# 资产生成与处理
+trimesh>=4.0
+numpy>=1.24
+pillow>=10.0
+opencv-python-headless>=4.8
+
+# 备选 Gradio 入口
+gradio>=4.30
+
+# 可选：rerun-sdk / open3d 等不强制

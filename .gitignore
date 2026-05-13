@@ -1,0 +1,74 @@
+# Python cache and virtual environments
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+.venv/
+venv/
+env/
+ENV/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Environment variables and local secrets
+.env
+.env.*
+!.env.example
+scripts/.env.local
+*.key
+*.pem
+*.p12
+
+# Frontend dependencies and build output
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/.vite-inspect/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Runtime logs and local process files
+logs/
+*.log
+*.pid
+
+# Generated jobs, exports, reports, and intermediate data
+outputs/jobs/
+outputs/exports/
+outputs/reports/
+data/raw/jobs/
+data/processed/
+
+# Downloaded/generated 3D demo assets
+data/polyhaven_products.json
+data/samples/glb/
+data/samples/polyhaven/
+data/samples/thumb/
+data/samples/*.glb
+
+# Heavy external repositories or model weights
+external/CatVTON/
+external/**/.git/
+models/
+checkpoints/
+weights/
+*.ckpt
+*.safetensors
+*.pth
+*.pt
+*.onnx
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.swp
+*.swo
