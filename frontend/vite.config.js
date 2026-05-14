@@ -6,6 +6,7 @@ export default defineConfig({
   server: {
     port: 5173,
     host: true,
+    allowedHosts: true,
     // 把后端 /api 与 /static 请求转发到 8000
     proxy: {
       "/api": {
