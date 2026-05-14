@@ -112,6 +112,13 @@ FFMPEG_EXTRACT_VF = "fps=2,scale=1280:-1"
 
 # CatVTON 推理命令模板（占位符将在 tryon.py 中被替换）
 # 通过 scripts/run_catvton_single.py 包装 CatVTON Gradio app 的单图推理逻辑。
+#
+# CATVTON_PYTHON 指向用来跑 CatVTON 推理的 python.exe。
+# 默认是项目内 .conda/envs/catvton/python.exe（由 scripts/install_catvton_env.ps1 创建），
+# 这样不依赖 conda 在 PATH，也不会用错环境。
+_DEFAULT_CATVTON_PY = PROJECT_ROOT / ".conda" / "envs" / "catvton" / "python.exe"
+CATVTON_PYTHON = os.environ.get("CATVTON_PYTHON", str(_DEFAULT_CATVTON_PY))
+
 CATVTON_WIDTH = int(os.environ.get("CATVTON_WIDTH", "768"))
 CATVTON_HEIGHT = int(os.environ.get("CATVTON_HEIGHT", "1024"))
 CATVTON_STEPS = int(os.environ.get("CATVTON_STEPS", "50"))
@@ -120,11 +127,35 @@ CATVTON_MIXED_PRECISION = os.environ.get("CATVTON_MIXED_PRECISION", "bf16")
 CATVTON_SEED = int(os.environ.get("CATVTON_SEED", "42"))
 CATVTON_ALLOW_TF32 = os.environ.get("CATVTON_ALLOW_TF32", "true").lower() == "true"
 CATVTON_SKIP_SAFETY_CHECK = os.environ.get("CATVTON_SKIP_SAFETY_CHECK", "true").lower() == "true"
-CATVTON_BASE_MODEL_PATH = os.environ.get("CATVTON_BASE_MODEL_PATH", "runwayml/stable-diffusion-inpainting")
-CATVTON_RESUME_PATH = os.environ.get("CATVTON_RESUME_PATH", "zhengchong/CatVTON")
+# Model paths. Default to project-local data/models if scripts/fetch_catvton_models.py
+# has been run; otherwise fall back to HF repo id and let CatVTON's snapshot_download
+# pull on-demand (slow, especially behind GFW).
+_CATVTON_MODELS_DIR = PROJECT_ROOT / "data" / "models"
+_LOCAL_SD_BASE = _CATVTON_MODELS_DIR / "booksforcharlie--stable-diffusion-inpainting"
+_LOCAL_CATVTON = _CATVTON_MODELS_DIR / "zhengchong--CatVTON"
+
+
+def _prefer_local_model(env_name: str, repo_id: str, local_path: Path) -> str:
+    value = os.environ.get(env_name)
+    if local_path.exists() and (not value or value == repo_id):
+        return str(local_path)
+    return value or repo_id
+
+
+CATVTON_BASE_MODEL_PATH = _prefer_local_model(
+    "CATVTON_BASE_MODEL_PATH",
+    "booksforcharlie/stable-diffusion-inpainting",
+    _LOCAL_SD_BASE,
+)
+CATVTON_RESUME_PATH = _prefer_local_model(
+    "CATVTON_RESUME_PATH",
+    "zhengchong/CatVTON",
+    _LOCAL_CATVTON,
+)
+CATVTON_ATTN_CKPT_VERSION = os.environ.get("CATVTON_ATTN_CKPT_VERSION", "mix")
 
 CATVTON_COMMAND_TEMPLATE = [
-    "python",
+    CATVTON_PYTHON,
     str(PROJECT_ROOT / "scripts" / "run_catvton_single.py"),
     "--catvton-dir",
     str(CATVTON_DIR),
@@ -152,6 +183,8 @@ CATVTON_COMMAND_TEMPLATE = [
     CATVTON_BASE_MODEL_PATH,
     "--resume-path",
     CATVTON_RESUME_PATH,
+    "--attn-ckpt-version",
+    CATVTON_ATTN_CKPT_VERSION,
 ]
 if CATVTON_ALLOW_TF32:
     CATVTON_COMMAND_TEMPLATE.append("--allow-tf32")
@@ -170,8 +203,9 @@ def nerfstudio_cmd_prefix() -> list[str]:
 
 
 def catvton_cmd_prefix() -> list[str]:
-    if USE_CONDA_WRAPPER:
-        return _conda_run(CATVTON_CONDA_ENV)
+    # CATVTON_COMMAND_TEMPLATE[0] is already the absolute path to the catvton env's python.exe,
+    # so wrapping with `conda run` is redundant and can break (it would activate a *different*
+    # env around our explicit interpreter). Always return empty.
     return []
 
 

@@ -411,8 +411,8 @@ const AvatarDressStage = forwardRef(function AvatarDressStage(
         const msg = err?.message || String(err);
         setMannequinError(
           msg.includes("404") || msg.includes("HTTP")
-            ? "找不到 mannequin GLB。请运行：python scripts/fetch_avatar.py"
-            : `mannequin 加载失败：${msg}`,
+            ? "人台资源暂时不可用，请检查本地资源后刷新页面。"
+            : `人台加载失败：${msg}`,
         );
       },
     );
@@ -511,12 +511,9 @@ const AvatarDressStage = forwardRef(function AvatarDressStage(
     <div className="avatar-stage" ref={mountRef}>
       {mannequinError && (
         <div className="avatar-stage-overlay">
-          <strong>3D 人台不可用</strong>
+          <strong>人台暂不可用</strong>
           <p>{mannequinError}</p>
-          <p className="hint">
-            下载完成后刷新页面。也可以把任意 rigged GLB 放到{" "}
-            <code>data/samples/avatars/mannequin.glb</code> 替换。
-          </p>
+          <p className="hint">请稍后重试，或联系资产管理员检查人台文件。</p>
         </div>
       )}
       {Object.keys(garmentErrors).length > 0 && (

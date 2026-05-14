@@ -12,6 +12,19 @@ const CATEGORY_OPTIONS = [
   { key: "apparel", label: "服装" },
 ];
 
+const TASK_LABELS = {
+  image_to_3d: "单图生成",
+  reconstruct: "高级重建",
+  tryon: "虚拟试穿",
+};
+
+const STATUS_LABELS = {
+  queued: "排队中",
+  running: "生成中",
+  success: "已完成",
+  failed: "失败",
+};
+
 /**
  * 已完成任务的详情卡片：3D 预览 + 上架表单 + 下载入口。
  *
@@ -25,6 +38,7 @@ const CATEGORY_OPTIONS = [
 export default function JobResultCard({ job, onPublished, onClose }) {
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
   const [category, setCategory] = useState("user-uploads");
   const [stock, setStock] = useState("1");
@@ -36,6 +50,7 @@ export default function JobResultCard({ job, onPublished, onClose }) {
     setShowForm(false);
     setMsg(null);
     setName("");
+    setDescription("");
     setPrice("");
     setCategory("user-uploads");
     setStock("1");
@@ -48,7 +63,6 @@ export default function JobResultCard({ job, onPublished, onClose }) {
   const glbUrl = job.outputs?.preview_url
     || pickGlbUrl(job.job_id, job.outputs?.optimized_glb)
     || pickGlbUrl(job.job_id, job.outputs?.glb);
-  const provider = job.outputs?.provider || job.params?.provider || "-";
   const progress = Math.round((job.progress || 0) * 100);
 
   const handlePublish = async () => {
@@ -57,6 +71,7 @@ export default function JobResultCard({ job, onPublished, onClose }) {
     try {
       const payload = {};
       if (name.trim()) payload.name = name.trim();
+      if (description.trim()) payload.description = description.trim();
       if (price && !Number.isNaN(Number(price))) payload.price = Number(price);
       if (category) payload.category = category;
       if (stock && !Number.isNaN(Number(stock))) payload.stock = Number(stock);
@@ -79,9 +94,8 @@ export default function JobResultCard({ job, onPublished, onClose }) {
       <div className="job-result-header">
         <div className="job-result-meta">
           <code>{job.job_id}</code>
-          <span className={`tag ${job.status}`}>{job.status}</span>
-          <span className="muted">{job.task_type}</span>
-          <span className="muted">provider: {provider}</span>
+          <span className={`tag ${job.status}`}>{STATUS_LABELS[job.status] || job.status}</span>
+          <span className="muted">{TASK_LABELS[job.task_type] || job.task_type}</span>
         </div>
         {onClose && (
           <button className="link" onClick={onClose}>收起 ×</button>
@@ -122,7 +136,14 @@ export default function JobResultCard({ job, onPublished, onClose }) {
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder={defaultName(job)}
+                placeholder="例如：北欧风木质边柜"
+              />
+              <label className="form-label">商品简介（可选）</label>
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                rows={4}
+                placeholder="写给顾客看的卖点说明，比如材质、尺寸、使用场景、保养方式。"
               />
               <div className="publish-row">
                 <div>
@@ -179,19 +200,11 @@ export default function JobResultCard({ job, onPublished, onClose }) {
 
       {isSuccess && !glbUrl && (
         <div className="hint" style={{ marginTop: 8 }}>
-          这个任务没有 GLB 产物（可能是 try-on 任务），无法在 3D 视图中预览。
+          这个任务没有可预览的 3D 资产。
         </div>
       )}
     </div>
   );
-}
-
-function defaultName(job) {
-  if (job.task_type === "image_to_3d") {
-    const p = job.outputs?.provider || "auto";
-    return `AIGC 单图 3D · ${job.job_id.slice(-8)} (${p})`;
-  }
-  return `自定义 3D 资产 ${job.job_id.slice(-8)}`;
 }
 
 function pickGlbUrl(jobId, abs) {

@@ -211,7 +211,7 @@ export default function AvatarTryOn() {
     const active = GARMENT_SLOTS
       .filter((slot) => garments[slot.key])
       .map((slot) => `${slot.label}：${garments[slot.key].label}`);
-    return active.length ? active.join(" / ") : "未选择服装 GLB";
+    return active.length ? active.join(" / ") : "尚未选择单品";
   }, [garments]);
 
   const settings = useMemo(() => ({
@@ -229,6 +229,10 @@ export default function AvatarTryOn() {
   ]);
 
   const activeTransform = slotTransforms[activeAdjustSlot] || DEFAULT_TRANSFORM;
+  const activeSlot = GARMENT_SLOTS.find((slot) => slot.key === activeAdjustSlot) || GARMENT_SLOTS[0];
+  const activeSlotOptions = slotOptions[activeAdjustSlot] || [];
+  const activeSlotGarment = garments[activeAdjustSlot] || null;
+  const selectedCount = GARMENT_SLOTS.filter((slot) => garments[slot.key]).length;
 
   const updateSlotTransform = (key, value) => {
     setSlotTransforms((prev) => ({
@@ -252,6 +256,13 @@ export default function AvatarTryOn() {
     setGarmentFiles((prev) => ({ ...prev, [slotKey]: null }));
   };
 
+  const clearAllSlots = () => {
+    setSelectedProductIds(makeSlotMap(() => ""));
+    setGarmentFiles(makeSlotMap(() => null));
+    setSlotSearches(makeSlotMap(() => ""));
+    setSlotTransforms(makeSlotMap(() => ({ ...DEFAULT_TRANSFORM })));
+  };
+
   const handleSnapshot = () => {
     const dataUrl = stageRef.current?.snapshot();
     downloadDataUrl(dataUrl, `avatar-tryon-${Date.now()}.png`);
@@ -263,13 +274,13 @@ export default function AvatarTryOn() {
         <div>
           <h1>3D 人台换装</h1>
           <p>
-            从商城选择服装 GLB，或给上装、下装、连衣裙、鞋子四个槽位分别上传模型。
-            四类资产可以同时叠加在人台上，并各自微调位置。
+            为商品上架前的搭配陈列和顾客试看准备一张干净的 3D 穿搭画面。
+            先选位置，再选款式，最后微调贴合度。
           </p>
         </div>
         <div className="status-pill">
-          <span className="tag success">Three.js</span>
-          <span>实时预览</span>
+          <span className="tag success">实时搭配</span>
+          <span>{selectedCount}/4 已选择</span>
         </div>
       </header>
 
@@ -277,10 +288,13 @@ export default function AvatarTryOn() {
         <div className="avatar-stage-panel">
           <div className="avatar-stage-toolbar">
             <div>
-              <strong>3D 换装台</strong>
+              <strong>搭配画面</strong>
               <span>{garmentSummary}</span>
             </div>
-            <button className="secondary" onClick={handleSnapshot}>导出截图</button>
+            <div className="avatar-stage-actions">
+              <button className="secondary" onClick={clearAllSlots} disabled={selectedCount === 0}>清空搭配</button>
+              <button className="primary" onClick={handleSnapshot}>导出画面</button>
+            </div>
           </div>
           <AvatarDressStage
             ref={stageRef}
@@ -291,106 +305,103 @@ export default function AvatarTryOn() {
 
         <aside className="avatar-controls">
           <section className="control-block">
-            <h2>服装搭配</h2>
-            <p className="control-hint">
-              这里只显示服装类 GLB。鞋子会出现在鞋子槽位；2D 虚拟试穿不处理鞋子，但 3D 人台可以展示鞋类模型。
-            </p>
+            <div className="control-block-title">
+              <span>1</span>
+              <div>
+                <h2>选择穿搭位置</h2>
+                <p>一次只编辑一个位置，已经选择的单品会保留在画面里。</p>
+              </div>
+            </div>
 
-            <div className="garment-slot-list">
+            <div className="slot-adjust-tabs slot-tabs-large">
               {GARMENT_SLOTS.map((slot) => {
-                const active = !!garments[slot.key];
-                const options = slotOptions[slot.key] || [];
+                const filled = !!garments[slot.key];
                 return (
-                  <div key={slot.key} className={`garment-slot-card ${active ? "active" : ""}`}>
-                    <div className="garment-slot-head">
-                      <div>
-                        <strong>{slot.label}</strong>
-                        <span>{slot.hint}</span>
-                      </div>
-                      <button
-                        className={`slot-adjust-btn ${activeAdjustSlot === slot.key ? "active" : ""}`}
-                        onClick={() => setActiveAdjustSlot(slot.key)}
-                        type="button"
-                      >
-                        调整
-                      </button>
-                    </div>
-
-                    <input
-                      className="slot-search-input"
-                      type="search"
-                      value={slotSearches[slot.key]}
-                      onChange={(e) => setSlotSearches((prev) => ({ ...prev, [slot.key]: e.target.value }))}
-                      placeholder={`搜索${slot.label}...`}
-                      autoComplete="off"
-                    />
-
-                    <select
-                      value={selectedProductIds[slot.key]}
-                      onChange={(e) => {
-                        setSelectedProductIds((prev) => ({ ...prev, [slot.key]: e.target.value }));
-                        if (e.target.value) {
-                          setGarmentFiles((prev) => ({ ...prev, [slot.key]: null }));
-                          setActiveAdjustSlot(slot.key);
-                        }
-                      }}
-                    >
-                      <option value="">{slot.emptyLabel}</option>
-                      {options.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name}
-                        </option>
-                      ))}
-                    </select>
-
-                    <label className="form-label">上传{slot.label} GLB / GLTF</label>
-                    <input
-                      type="file"
-                      accept=".glb,.gltf,model/gltf-binary,model/gltf+json"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0] || null;
-                        setGarmentFiles((prev) => ({ ...prev, [slot.key]: file }));
-                        if (file) {
-                          setSelectedProductIds((prev) => ({ ...prev, [slot.key]: "" }));
-                          setActiveAdjustSlot(slot.key);
-                        }
-                      }}
-                    />
-
-                    {active && (
-                      <button
-                        className="secondary slot-clear-btn"
-                        onClick={() => clearSlot(slot.key)}
-                        type="button"
-                      >
-                        移除{slot.label}
-                      </button>
-                    )}
-                  </div>
+                  <button
+                    key={slot.key}
+                    type="button"
+                    className={`${activeAdjustSlot === slot.key ? "active" : ""} ${filled ? "filled" : ""}`}
+                    onClick={() => setActiveAdjustSlot(slot.key)}
+                  >
+                    <span>{slot.label}</span>
+                    {filled && <small>已选</small>}
+                  </button>
                 );
               })}
+            </div>
+
+            <div className={`garment-slot-card active focused`}>
+              <div className="garment-slot-head">
+                <div>
+                  <strong>{activeSlot.label}</strong>
+                  <span>{activeSlot.hint}</span>
+                </div>
+                {activeSlotGarment && <span className="asset-state">已加入</span>}
+              </div>
+
+              <input
+                className="slot-search-input"
+                type="search"
+                value={slotSearches[activeAdjustSlot]}
+                onChange={(e) => setSlotSearches((prev) => ({ ...prev, [activeAdjustSlot]: e.target.value }))}
+                placeholder={`搜索${activeSlot.label}商品`}
+                autoComplete="off"
+              />
+
+              <select
+                value={selectedProductIds[activeAdjustSlot]}
+                onChange={(e) => {
+                  setSelectedProductIds((prev) => ({ ...prev, [activeAdjustSlot]: e.target.value }));
+                  if (e.target.value) {
+                    setGarmentFiles((prev) => ({ ...prev, [activeAdjustSlot]: null }));
+                  }
+                }}
+              >
+                <option value="">{activeSlot.emptyLabel}</option>
+                {activeSlotOptions.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+
+              <label className="form-label">导入{activeSlot.label} 3D 模型</label>
+              <input
+                type="file"
+                accept=".glb,.gltf,model/gltf-binary,model/gltf+json"
+                onChange={(e) => {
+                  const file = e.target.files?.[0] || null;
+                  setGarmentFiles((prev) => ({ ...prev, [activeAdjustSlot]: file }));
+                  if (file) {
+                    setSelectedProductIds((prev) => ({ ...prev, [activeAdjustSlot]: "" }));
+                  }
+                }}
+              />
+
+              {activeSlotGarment && (
+                <div className="selected-asset-row">
+                  <span>{activeSlotGarment.label}</span>
+                  <button
+                    className="link"
+                    onClick={() => clearSlot(activeAdjustSlot)}
+                    type="button"
+                  >
+                    移除
+                  </button>
+                </div>
+              )}
             </div>
 
             {productError && <div className="error-message compact">商品资产读取失败：{productError}</div>}
           </section>
 
           <section className="control-block">
-            <h2>槽位定位</h2>
-            <p className="control-hint">
-              先点某个槽位的"调整"，下面滑块只影响该槽位，不会移动其它服装。
-            </p>
-
-            <div className="slot-adjust-tabs">
-              {GARMENT_SLOTS.map((slot) => (
-                <button
-                  key={slot.key}
-                  type="button"
-                  className={activeAdjustSlot === slot.key ? "active" : ""}
-                  onClick={() => setActiveAdjustSlot(slot.key)}
-                >
-                  {slot.label}
-                </button>
-              ))}
+            <div className="control-block-title">
+              <span>2</span>
+              <div>
+                <h2>调整贴合度</h2>
+                <p>当前正在调整：{activeSlot.label}</p>
+              </div>
             </div>
 
             <div className="slider-field">
@@ -429,12 +440,18 @@ export default function AvatarTryOn() {
               <strong>{activeTransform.customRotationY.toFixed(2)}</strong>
             </div>
             <button className="secondary" onClick={resetActiveTransform}>
-              重置当前槽位
+              重置{activeSlot.label}
             </button>
           </section>
 
           <section className="control-block">
-            <h2>人台</h2>
+            <div className="control-block-title">
+              <span>3</span>
+              <div>
+                <h2>人台与场景</h2>
+                <p>按品牌陈列需要调整底色、参考线和人台透明度。</p>
+              </div>
+            </div>
             <label className="form-label">人台底色</label>
             <select value={bodyColor} onChange={(e) => setBodyColor(e.target.value)}>
               {BODY_COLORS.map((b) => <option key={b.key} value={b.key}>{b.label}</option>)}
@@ -451,19 +468,18 @@ export default function AvatarTryOn() {
               <span>显示地面参考线</span>
             </label>
 
-            <label className="form-label">自定义人台 GLB</label>
+            <label className="form-label">导入自有人台模型</label>
             <input
               type="file"
               accept=".glb,.gltf,model/gltf-binary,model/gltf+json"
               onChange={(e) => setMannequinFile(e.target.files?.[0] || null)}
             />
             <p className="control-hint">
-              想要更真实的人体？可以下载 rigged GLB 后上传，或覆盖
-              <code> data/samples/avatars/mannequin.glb </code>。
+              适合品牌自有人台、尺码模特或门店陈列模板；未导入时使用默认人台。
             </p>
             {mannequinFile && (
               <div className="asset-chip">
-                <span>自定义人台</span>
+                <span>当前人台</span>
                 <strong>{mannequinFile.name}</strong>
               </div>
             )}
@@ -477,16 +493,16 @@ export default function AvatarTryOn() {
       </section>
 
       <section className="info-card avatar-info">
-        <h3>当前能做什么，做不到什么</h3>
+        <h3>搭配建议</h3>
         <ul>
           <li>
-            <strong>3D 人台</strong>：四个槽位可同时叠加，鞋子也能作为 3D 模型展示在人台脚部。
+            <strong>商品页主图</strong>：优先导出正面 45 度视角，能同时看到版型和材质。
           </li>
           <li>
-            <strong>对齐方式</strong>：每个槽位用自己的身体锚点自动缩放和摆放，再用滑块做微调。
+            <strong>组合陈列</strong>：上装、下装和鞋子分开调整，更适合做套装搭配和门店陈列。
           </li>
           <li>
-            <strong>边界</strong>：这是实时 GLB 叠加与摆位，不是骨骼绑定或布料仿真；不同来源模型仍可能需要手动调位置。
+            <strong>上新效率</strong>：同一个人台可以复用多套商品，保持视觉风格一致。
           </li>
         </ul>
       </section>

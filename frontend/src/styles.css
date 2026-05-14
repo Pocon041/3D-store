@@ -1394,13 +1394,17 @@ button.link:hover {
 .field input[type="text"],
 .field select,
 .image-to-3d-panel input[type="file"],
+.image-to-3d-panel input[type="text"],
+.image-to-3d-panel input[type="number"],
 .image-to-3d-panel select,
 .multiview-panel .multiview-provider select,
 .job-result-card .publish-form input[type="text"],
 .job-result-card .publish-form input[type="number"],
+.job-result-card .publish-form textarea,
 .job-result-card .publish-form select,
 .image-to-3d-panel .publish-form input[type="text"],
 .image-to-3d-panel .publish-form input[type="number"],
+.image-to-3d-panel .publish-form textarea,
 .image-to-3d-panel .publish-form select {
   width: 100%;
   min-height: 40px;
@@ -1679,6 +1683,13 @@ code {
   font-size: 12px;
 }
 
+.avatar-stage-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .avatar-stage {
   width: 100%;
   height: min(68vh, 680px);
@@ -1789,7 +1800,7 @@ code {
 }
 
 .control-block h2 {
-  margin: 0 0 12px;
+  margin: 0;
   font-size: 15px;
 }
 
@@ -1798,6 +1809,30 @@ code {
   color: var(--muted);
   font-size: 12px;
   line-height: 1.6;
+}
+
+.control-block-title {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  margin-bottom: 14px;
+}
+
+.control-block-title > span {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #12324a;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.control-block-title p {
+  margin: 4px 0 0;
 }
 
 .control-block select,
@@ -1828,6 +1863,10 @@ code {
   background: #f6f9ff;
 }
 
+.garment-slot-card.focused {
+  padding: 12px;
+}
+
 .garment-slot-head {
   display: flex;
   align-items: flex-start;
@@ -1850,6 +1889,18 @@ code {
   margin-top: 2px;
   color: var(--muted);
   font-size: 11px;
+}
+
+.asset-state {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: #e6f6ef;
+  color: #12683f;
+  font-size: 11px;
+  font-weight: 900;
 }
 
 .slot-adjust-btn {
@@ -1903,6 +1954,53 @@ code {
   font-size: 12px;
   font-weight: 800;
   cursor: pointer;
+}
+
+.slot-tabs-large {
+  margin-bottom: 12px;
+}
+
+.slot-tabs-large button {
+  display: flex;
+  min-height: 48px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+}
+
+.slot-tabs-large button small {
+  color: inherit;
+  font-size: 10px;
+  opacity: 0.76;
+}
+
+.slot-tabs-large button.filled:not(.active) {
+  border-color: #9ccfb6;
+  background: #f1fbf6;
+  color: #12683f;
+}
+
+.selected-asset-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 2px;
+  padding: 9px 10px;
+  border: 1px solid #d5eadf;
+  border-radius: var(--radius);
+  background: #f6fcf8;
+}
+
+.selected-asset-row span {
+  min-width: 0;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .segmented-grid {
@@ -2167,6 +2265,12 @@ code {
   border: 1px solid #d8e4ff;
   border-radius: var(--radius);
   background: #f8fbff;
+}
+
+.publish-form textarea {
+  min-height: 96px;
+  resize: vertical;
+  line-height: 1.55;
 }
 
 .publish-row,
@@ -2784,4 +2888,279 @@ code {
 .multiview-panel .view-grid-2x2 .view-slot-body {
   min-height: 150px !important;
   aspect-ratio: 16 / 9 !important;
+}
+
+.tryon-console {
+  display: grid;
+  grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.tryon-control-panel,
+.tryon-result-panel {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fff;
+  box-shadow: var(--shadow-sm);
+}
+
+.tryon-control-panel {
+  padding: 16px;
+}
+
+.tryon-result-panel {
+  min-height: 560px;
+  padding: 16px;
+}
+
+.tryon-panel-head,
+.tryon-result-head,
+.tryon-input-label,
+.tryon-render-footer,
+.tryon-result-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.tryon-eyebrow {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.tryon-panel-head h2,
+.tryon-result-head h2 {
+  margin: 0;
+  color: var(--text);
+  font-size: 18px;
+  line-height: 1.25;
+}
+
+.tryon-status-line {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  background: #f8fafc;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.tryon-input-block {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.tryon-input-label {
+  margin-bottom: 10px;
+}
+
+.tryon-input-label strong {
+  color: var(--text);
+  font-size: 14px;
+}
+
+.tryon-input-label span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.tryon-garment-summary {
+  display: grid;
+  grid-template-columns: 86px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+}
+
+.tryon-garment-thumb {
+  width: 86px;
+  height: 108px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #f8fafc;
+  overflow: hidden;
+  color: var(--muted);
+  font-weight: 900;
+}
+
+.tryon-garment-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.tryon-garment-name {
+  margin-bottom: 8px;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 850;
+}
+
+.tryon-upload-zone {
+  min-height: 170px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  border: 1px dashed #cbd5e1;
+  border-radius: var(--radius);
+  background: #f8fafc;
+  color: #475569;
+  font-weight: 850;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.tryon-upload-zone input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.tryon-upload-zone.has-image {
+  min-height: 250px;
+  border-style: solid;
+}
+
+.tryon-upload-zone img {
+  width: 100%;
+  height: 100%;
+  min-height: 250px;
+  object-fit: contain;
+  background: #f8fafc;
+}
+
+.tryon-advanced {
+  margin-top: 12px;
+}
+
+.tryon-advanced summary {
+  cursor: pointer;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.tryon-file-row,
+.tryon-check-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 10px;
+  color: #475569;
+  font-size: 13px;
+}
+
+.tryon-file-row select,
+.tryon-file-row input[type="file"] {
+  max-width: 210px;
+}
+
+.tryon-render-card {
+  margin-top: 12px;
+}
+
+.tryon-render-footer {
+  margin-top: 8px;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.tryon-render-footer .secondary {
+  min-height: 32px;
+  padding: 0 10px;
+}
+
+.tryon-submit {
+  width: 100%;
+  margin-top: 14px;
+}
+
+.tryon-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.tryon-preview-tile {
+  min-height: 420px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #f8fafc;
+  overflow: hidden;
+}
+
+.tryon-preview-title {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  color: #475569;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.tryon-preview-tile img,
+.tryon-final-result img {
+  width: 100%;
+  height: 100%;
+  min-height: 380px;
+  object-fit: contain;
+  display: block;
+  background: #f8fafc;
+}
+
+.tryon-preview-empty {
+  min-height: 380px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.tryon-final-result {
+  margin-top: 14px;
+}
+
+.tryon-final-result img {
+  max-height: 680px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.tryon-result-actions {
+  justify-content: flex-start;
+  margin-top: 12px;
+}
+
+@media (max-width: 1100px) {
+  .tryon-console {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 680px) {
+  .tryon-preview-grid,
+  .tryon-garment-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .tryon-garment-thumb {
+    width: 100%;
+    height: 180px;
+  }
 }

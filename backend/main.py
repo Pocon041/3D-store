@@ -35,6 +35,7 @@ from .pipelines.image_to_3d import (
     run_image_to_3d_resume,
     run_multiview_to_3d_job,
 )
+from .pipelines.import_glb import run_import_glb_job
 from .pipelines.reconstruct import run_reconstruction_job
 from .pipelines.tryon import run_tryon_job
 from .schemas import CreateJobResponse, HealthResponse
@@ -306,6 +307,30 @@ async def create_tryon_job(
     return CreateJobResponse(job_id=job_id, status="queued", message="Try-on job created.")
 
 
+@app.get("/api/tryon/capabilities")
+def api_tryon_capabilities():
+    catvton_python = Path(config.CATVTON_PYTHON)
+    base_model = Path(config.CATVTON_BASE_MODEL_PATH)
+    resume_path = Path(config.CATVTON_RESUME_PATH)
+    ready = (
+        config.CATVTON_DIR.exists()
+        and catvton_python.exists()
+        and base_model.exists()
+        and resume_path.exists()
+    )
+    return {
+        "ready": ready,
+        "default_mock": not ready,
+        "catvton_dir": str(config.CATVTON_DIR),
+        "catvton_python": str(catvton_python),
+        "base_model_path": str(config.CATVTON_BASE_MODEL_PATH),
+        "resume_path": str(config.CATVTON_RESUME_PATH),
+        "width": config.CATVTON_WIDTH,
+        "height": config.CATVTON_HEIGHT,
+        "steps": config.CATVTON_STEPS,
+    }
+
+
 @app.get("/api/image-to-3d/providers")
 def api_image_to_3d_providers():
     """前端发现可用的图生 3D Provider；同时返回当前默认值。"""
@@ -314,6 +339,72 @@ def api_image_to_3d_providers():
         "available": list_providers(),
         "tripo_configured": bool(config.TRIPO_API_KEY),
     }
+
+
+@app.post("/api/import-glb", response_model=CreateJobResponse)
+async def create_import_glb_job(
+    model: UploadFile = File(...),
+    thumbnail: Optional[UploadFile] = File(None),
+    name: Optional[str] = Form(None),
+    price: Optional[float] = Form(0.0),
+    stock: Optional[int] = Form(1),
+    category: str = Form("apparel"),
+    garment_slot: str = Form("upper"),
+) -> CreateJobResponse:
+    """直接导入商家已有 GLB，并自动上架为商品。
+
+    产物布局与 image_to_3d/reconstruct 保持一致：
+    outputs/jobs/<job_id>/exports/glb/model.glb + thumbnail.png。
+    """
+    suffix = Path(model.filename or "").suffix.lower()
+    if suffix != ".glb":
+        raise HTTPException(status_code=400, detail="只支持上传 .glb 二进制模型")
+    if garment_slot not in {"upper", "lower", "full", "shoes"}:
+        raise HTTPException(status_code=400, detail="garment_slot must be upper / lower / full / shoes")
+
+    job_id = generate_job_id("glb")
+    glb_dir = config.OUTPUT_DIR / job_id / "exports" / "glb"
+    glb_path = await save_upload_file(model, glb_dir, filename="model.glb")
+
+    thumb_path = None
+    if thumbnail is not None and thumbnail.filename:
+        thumb_suffix = Path(thumbnail.filename or "").suffix.lower() or ".png"
+        if thumb_suffix not in {".png", ".jpg", ".jpeg", ".webp"}:
+            raise HTTPException(status_code=400, detail="thumbnail must be png / jpg / jpeg / webp")
+        thumb_path = await save_upload_file(
+            thumbnail,
+            config.OUTPUT_DIR / job_id / "_input",
+            filename=f"thumbnail{thumb_suffix}",
+        )
+
+    display_name = (name or Path(model.filename or "Imported GLB").stem).strip()
+    job_store.create_job(
+        job_id,
+        "image_to_3d",
+        params={
+            "kind": "import_glb",
+            "provider": "manual-glb",
+            "filename": model.filename,
+            "published": True,
+            "product_name": display_name,
+            "product_category": category or "apparel",
+            "product_price": float(price or 0.0),
+            "product_stock": int(stock or 1),
+            "product_license": "Merchant Upload",
+            "product_tags": ["GLB", "3D", "服装", garment_slot],
+            "garment_slot": garment_slot,
+            "product_tryonable": (category or "apparel") == "apparel",
+        },
+    )
+
+    _run_in_thread(
+        run_import_glb_job,
+        job_id=job_id,
+        glb_path=str(glb_path),
+        thumbnail_path=str(thumb_path) if thumb_path else None,
+    )
+
+    return CreateJobResponse(job_id=job_id, status="queued", message="GLB import job created.")
 
 
 @app.post("/api/image-to-3d", response_model=CreateJobResponse)
@@ -449,9 +540,11 @@ def root():
             "/api/products/{product_id}",
             "/api/reconstruct",
             "/api/tryon",
+            "/api/tryon/capabilities",
             "/api/image-to-3d",
             "/api/image-to-3d/providers",
             "/api/image-to-3d/resume",
+            "/api/import-glb",
             "/api/multiview-to-3d",
             "/api/jobs",
             "/api/jobs/{job_id}",

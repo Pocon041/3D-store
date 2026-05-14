@@ -13,6 +13,47 @@ from pathlib import Path
 
 from PIL import Image
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+
+def _set_project_path_env(name: str, rel_path: str) -> None:
+    current = os.environ.get(name)
+    if current:
+        path = Path(current)
+        if not path.is_absolute():
+            path = PROJECT_ROOT / path
+    else:
+        path = PROJECT_ROOT / rel_path
+    path.mkdir(parents=True, exist_ok=True)
+    os.environ[name] = str(path)
+
+
+def _prepare_project_runtime() -> None:
+    for name, rel_path in {
+        "XDG_CACHE_HOME": ".cache",
+        "HF_HOME": ".cache/huggingface",
+        "HF_HUB_CACHE": ".cache/huggingface/hub",
+        "HUGGINGFACE_HUB_CACHE": ".cache/huggingface/hub",
+        "HF_DATASETS_CACHE": ".cache/huggingface/datasets",
+        "TRANSFORMERS_CACHE": ".cache/huggingface/transformers",
+        "DIFFUSERS_CACHE": ".cache/huggingface/diffusers",
+        "TORCH_HOME": ".cache/torch",
+        "MPLCONFIGDIR": ".cache/matplotlib",
+        "TEMP": ".cache/tmp",
+        "TMP": ".cache/tmp",
+    }.items():
+        _set_project_path_env(name, rel_path)
+    os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
+    os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
+    os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
+    os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+
+
+def _append_local_dependency_overlay() -> None:
+    deps = PROJECT_ROOT / ".deps" / "catvton"
+    if deps.exists():
+        sys.path.append(str(deps.resolve()))
+
 
 def _category_for_catvton(category: str) -> str:
     mapping = {
@@ -27,9 +68,11 @@ def _category_for_catvton(category: str) -> str:
 def _load_catvton(catvton_dir: Path):
     if not catvton_dir.exists():
         raise FileNotFoundError(f"CatVTON directory not found: {catvton_dir}")
+    _append_local_dependency_overlay()
     sys.path.insert(0, str(catvton_dir.resolve()))
 
     import torch  # type: ignore
+    import model.pipeline as catvton_pipeline_module  # type: ignore
     from diffusers.image_processor import VaeImageProcessor  # type: ignore
     from huggingface_hub import snapshot_download  # type: ignore
     from model.cloth_masker import AutoMasker, vis_mask  # type: ignore
@@ -40,6 +83,7 @@ def _load_catvton(catvton_dir: Path):
         "torch": torch,
         "VaeImageProcessor": VaeImageProcessor,
         "snapshot_download": snapshot_download,
+        "catvton_pipeline_module": catvton_pipeline_module,
         "AutoMasker": AutoMasker,
         "vis_mask": vis_mask,
         "CatVTONPipeline": CatVTONPipeline,
@@ -47,6 +91,25 @@ def _load_catvton(catvton_dir: Path):
         "resize_and_crop": resize_and_crop,
         "resize_and_padding": resize_and_padding,
     }
+
+
+def _redirect_hardcoded_vae(modules: dict, base_model_path: str) -> None:
+    """Make CatVTON's hardcoded sd-vae-ft-mse load from local base_ckpt/vae."""
+    base = Path(base_model_path)
+    if not (base / "vae" / "config.json").exists():
+        return
+    pipeline_module = modules["catvton_pipeline_module"]
+    original = pipeline_module.AutoencoderKL
+
+    class LocalVaeAutoencoderKL:
+        @staticmethod
+        def from_pretrained(pretrained_model_name_or_path, *args, **kwargs):
+            if pretrained_model_name_or_path == "stabilityai/sd-vae-ft-mse":
+                kwargs["subfolder"] = "vae"
+                return original.from_pretrained(str(base), *args, **kwargs)
+            return original.from_pretrained(pretrained_model_name_or_path, *args, **kwargs)
+
+    pipeline_module.AutoencoderKL = LocalVaeAutoencoderKL
 
 
 def _parse_args() -> argparse.Namespace:
@@ -65,7 +128,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--mixed-precision", default="bf16", choices=["no", "fp16", "bf16"])
     parser.add_argument("--allow-tf32", action="store_true")
     parser.add_argument("--skip-safety-check", action="store_true")
-    parser.add_argument("--base-model-path", default="runwayml/stable-diffusion-inpainting")
+    parser.add_argument("--base-model-path", default="booksforcharlie/stable-diffusion-inpainting")
     parser.add_argument("--resume-path", default="zhengchong/CatVTON")
     parser.add_argument("--attn-ckpt-version", default="mix")
     parser.add_argument("--mask", default=None, help="Optional precomputed mask image")
@@ -74,6 +137,7 @@ def _parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    _prepare_project_runtime()
     args = _parse_args()
     modules = _load_catvton(Path(args.catvton_dir))
 
@@ -95,6 +159,7 @@ def main() -> None:
         repo_path = Path(modules["snapshot_download"](repo_id=args.resume_path))
 
     weight_dtype = modules["init_weight_dtype"](args.mixed_precision)
+    _redirect_hardcoded_vae(modules, args.base_model_path)
     pipeline = modules["CatVTONPipeline"](
         base_ckpt=args.base_model_path,
         attn_ckpt=str(repo_path),
@@ -159,5 +224,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
     main()

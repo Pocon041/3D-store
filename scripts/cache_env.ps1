@@ -27,5 +27,9 @@ Set-ProjectCacheEnv "CONDA_PKGS_DIRS"       ".cache\conda\pkgs"
 Set-ProjectCacheEnv "CONDA_ENVS_PATH"       ".conda\envs"
 Set-ProjectCacheEnv "TEMP"                  ".cache\tmp"
 Set-ProjectCacheEnv "TMP"                   ".cache\tmp"
+[Environment]::SetEnvironmentVariable("HF_HUB_DISABLE_XET", "1", "Process")
+if (-not $env:HF_ENDPOINT) {
+    [Environment]::SetEnvironmentVariable("HF_ENDPOINT", "https://hf-mirror.com", "Process")
+}
 
 Write-Host ("[env] project cache root: {0}" -f (Join-Path $root ".cache"))

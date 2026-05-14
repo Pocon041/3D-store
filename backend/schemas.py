@@ -60,6 +60,7 @@ class JobOutputs(BaseModel):
     # 图生 3D 专有字段
     source_image: Optional[str] = None
     thumbnail: Optional[str] = None
+    thumbnail_url: Optional[str] = None
     provider: Optional[str] = None
     provider_task_id: Optional[str] = None
 

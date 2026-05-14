@@ -12,7 +12,42 @@ from urllib.parse import quote
 from . import config
 
 
+def _tryon_category(slot: str) -> str:
+    if slot == "full":
+        return "dress"
+    if slot == "lower":
+        return "lower"
+    return "upper"
+
+
 _LOCAL_APPAREL: list[dict[str, Any]] = [
+    {
+        "id": "local-apparel-adidas-jacket",
+        "filename": "7ad398dd7b67d87e550dee9339bee091.glb",
+        "name": "adidas 夹克上装",
+        "price": 699.0,
+        "stock": 12,
+        "tags": ["服装", "夹克", "上装", "adidas"],
+        "garment_slot": "upper",
+    },
+    {
+        "id": "local-apparel-polo-shirt",
+        "filename": "3b4c212dfe1d505444538e8592346caa.glb",
+        "name": "Polo 衫短袖上衣",
+        "price": 299.0,
+        "stock": 20,
+        "tags": ["服装", "Polo", "短袖", "上装"],
+        "garment_slot": "upper",
+    },
+    {
+        "id": "local-apparel-jeans",
+        "filename": "e94719d68e8e34583a4f5ca549e38820.glb",
+        "name": "牛仔裤下装",
+        "price": 399.0,
+        "stock": 16,
+        "tags": ["服装", "牛仔裤", "下装"],
+        "garment_slot": "lower",
+    },
     {
         "id": "local-apparel-1987-0353-01",
         "filename": "1987_0353_01-100k-2048_std_draco.glb",
@@ -58,6 +93,15 @@ _LOCAL_APPAREL: list[dict[str, Any]] = [
         "tags": ["服装", "连衣裙", "博物馆藏品", "4K"],
         "garment_slot": "full",
     },
+    {
+        "id": "local-apparel-down-jacket-aa843c96",
+        "filename": "aa843c9607b2e58e67ce39f5f7788c88.glb",
+        "name": "羽绒服上装",
+        "price": 899.0,
+        "stock": 12,
+        "tags": ["服装", "羽绒服", "外套", "上装", "down jacket"],
+        "garment_slot": "upper",
+    },
 ]
 
 
@@ -101,7 +145,8 @@ def load_local_apparel_products() -> list[dict[str, Any]]:
             "license": "Local import",
             "source": "local-apparel",
             "tags": item["tags"],
-            "tryonable": False,
+            "tryonable": True,
+            "tryon_category": _tryon_category(item["garment_slot"]),
             "avatar_dressable": True,
             "garment_slot": item["garment_slot"],
             "model_local": True,

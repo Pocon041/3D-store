@@ -2,9 +2,9 @@ import React, { useState } from "react";
 import { createReconstructJob } from "../api.js";
 
 const QUALITY_OPTIONS = [
-  { value: "fast", label: "fast（约 3000 iter）" },
-  { value: "balanced", label: "balanced（约 7000 iter）" },
-  { value: "high", label: "high（splatfacto-big，约 15000 iter）" },
+  { value: "fast", label: "快速" },
+  { value: "balanced", label: "均衡" },
+  { value: "high", label: "精细" },
 ];
 
 export default function Upload3D({ onJobCreated }) {
@@ -24,7 +24,7 @@ export default function Upload3D({ onJobCreated }) {
       return;
     }
     if (mode === "video" && files.length !== 1) {
-      setError("video 模式只能上传单个视频");
+      setError("环绕视频模式只能上传单个视频");
       return;
     }
     setSubmitting(true);
@@ -78,7 +78,7 @@ export default function Upload3D({ onJobCreated }) {
               checked={exportGlb}
               onChange={(e) => setExportGlb(e.target.checked)}
             />
-            <label htmlFor="exportGlb">导出 GLB（含 Draco 压缩）</label>
+            <label htmlFor="exportGlb">生成可上架 3D 文件</label>
           </div>
           <div className="field-inline">
             <input
@@ -87,7 +87,7 @@ export default function Upload3D({ onJobCreated }) {
               checked={mock}
               onChange={(e) => setMock(e.target.checked)}
             />
-            <label htmlFor="mock">使用 mock 模式（无需 GPU / Nerfstudio）</label>
+            <label htmlFor="mock">快速预览模式</label>
           </div>
         </div>
       </div>

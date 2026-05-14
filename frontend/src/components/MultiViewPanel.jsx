@@ -133,11 +133,11 @@ export default function MultiViewPanel({ onResolved }) {
   };
 
   const providerLabel = (p) => {
-    if (!p) return `服务器默认（${providers.default}）`;
-    if (p === "mock") return "mock（占位，无 multiview 能力会取第一张图）";
+    if (!p) return "自动选择";
+    if (p === "mock") return "快速预览";
     if (p === "tripo") return providers.tripo_configured
-      ? "Tripo3D · multiview_to_model（已配 key）"
-      : "Tripo3D（未配 key，会降级 mock）";
+      ? "高质量生成"
+      : "快速预览";
     return p;
   };
 
@@ -177,7 +177,7 @@ export default function MultiViewPanel({ onResolved }) {
           <div className="multiview-side-card">
             <div className="multiview-side-title">生成设置</div>
             <div className="multiview-provider">
-              <label className="form-label">Provider</label>
+              <label className="form-label">生成方式</label>
               <select
                 value={provider}
                 onChange={(e) => setProvider(e.target.value)}
@@ -213,8 +213,7 @@ export default function MultiViewPanel({ onResolved }) {
           </div>
 
           <p className="hint">
-            默认 Tripo <code>multiview_to_model</code>：上传 1-4 张视图 → 10-30 秒生成单个 PBR GLB。
-            视图越多，几何与贴图越准。
+            视图越多，商品轮廓、背面细节和材质连续性越稳定。建议至少提供正面和背面。
           </p>
         </aside>
       </div>

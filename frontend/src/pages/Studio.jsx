@@ -5,8 +5,22 @@ import TryOnPanel from "../components/TryOnPanel.jsx";
 import MetricsTable from "../components/MetricsTable.jsx";
 import ImageTo3DPanel from "../components/ImageTo3DPanel.jsx";
 import MultiViewPanel from "../components/MultiViewPanel.jsx";
+import GlbImportPanel from "../components/GlbImportPanel.jsx";
 import JobResultCard from "../components/JobResultCard.jsx";
 import { health, listJobs, getJob } from "../api.js";
+
+const TASK_LABELS = {
+  image_to_3d: "单图生成",
+  reconstruct: "高级重建",
+  tryon: "虚拟试穿",
+};
+
+const STATUS_LABELS = {
+  queued: "排队中",
+  running: "生成中",
+  success: "已完成",
+  failed: "失败",
+};
 
 export default function Studio() {
   const [backendOk, setBackendOk] = useState(null);
@@ -81,26 +95,33 @@ export default function Studio() {
       <section className="section">
         <h2>图生 3D（推荐）</h2>
         <p className="desc">
-          上传一张商品图，<strong>10-30 秒</strong>生成可旋转的 3D 模型。
-          默认 mock，配置 <code>TRIPO_API_KEY</code> 后自动调用 Tripo3D 真实生成。
+          上传一张商品图，生成可旋转的 3D 展示资产。
+          适合快速补齐商品详情页、货架陈列和移动端展示素材。
         </p>
         <ImageTo3DPanel onResolved={(r) => { setJobId(r.job_id); setJob(r); refreshRecent(); }} />
+      </section>
+
+      <section className="section">
+        <h2>直接导入 GLB 服装</h2>
+        <p className="desc">
+          已经有 GLB 模型时，直接上传即可生成缩略图、上架到服装商品库，并同步到 3D 换装人台。
+        </p>
+        <GlbImportPanel onResolved={(r) => { setJobId(r.job_id); setJob(r); refreshRecent(); }} />
       </section>
 
       <section className="section">
         <h2>多视角生 3D</h2>
         <p className="desc">
           上传 <strong>1-4 张</strong>同一物体的不同角度图（建议正面 + 背面 + 侧面），
-          走 Tripo <code>multiview_to_model</code> 真实生成单个 PBR GLB；
-          视图越多，几何越准确。
+          让系统生成更稳定的 3D 展示资产；视图越多，轮廓和纹理越准确。
         </p>
         <MultiViewPanel
           onResolved={(r) => { setJobId(r.job_id); setJob(r); refreshRecent(); }}
         />
 
         <details className="advanced-mode">
-          <summary>高级模式：NeRF / 3DGS（需 GPU + Nerfstudio）</summary>
-          <p className="desc">支持多张图片或环绕视频。无 GPU 可勾选 mock 跑通流程。</p>
+          <summary>高级重建模式</summary>
+          <p className="desc">适合有多张实拍图或环绕视频的商品，生成时间更长，但细节更完整。</p>
           <Upload3D onJobCreated={(jid) => { setJobId(jid); setJob(null); }} />
           {jobId && (
             <div style={{ marginTop: 16 }}>
@@ -112,7 +133,7 @@ export default function Studio() {
 
       <section className="section">
         <h2>二维虚拟试穿</h2>
-        <p className="desc">上传人像和服装图，调用 CatVTON（或 mock）生成对比图。</p>
+        <p className="desc">上传人像和服装图，生成服装上身效果与对比图。</p>
         <TryOnPanel />
       </section>
 
@@ -124,7 +145,7 @@ export default function Studio() {
               关闭 ×
             </button>
           </div>
-          <p className="desc">3D 预览、上架与下载操作集中在这里；任务仍在运行时会自动刷新。</p>
+          <p className="desc">预览、上架与下载操作集中在这里；生成中会自动刷新状态。</p>
           <JobResultCard
             job={job}
             onPublished={() => refreshRecent()}
@@ -142,13 +163,13 @@ export default function Studio() {
       <section className="section">
         <h2>历史任务</h2>
         <p className="desc">
-          最近 10 条任务。点「查看」展开 3D 预览与一键上架；图生 3D / 重建成功的任务可以挂到商城任意分类。
+          最近 10 条生成记录。点「查看」展开预览与上架操作，成功生成的资产可以挂到商城任意分类。
         </p>
         <table className="metrics-table">
           <thead>
             <tr>
-              <th>job_id</th>
-              <th>类型</th>
+              <th>编号</th>
+              <th>来源</th>
               <th>状态</th>
               <th>阶段</th>
               <th>更新时间</th>
@@ -162,8 +183,8 @@ export default function Studio() {
             {recentJobs.map((j) => (
               <tr key={j.job_id}>
                 <td style={{ fontFamily: "monospace" }}>{j.job_id}</td>
-                <td>{j.task_type}</td>
-                <td><span className={`tag ${j.status}`}>{j.status}</span></td>
+                <td>{TASK_LABELS[j.task_type] || j.task_type}</td>
+                <td><span className={`tag ${j.status}`}>{STATUS_LABELS[j.status] || j.status}</span></td>
                 <td>{j.stage}</td>
                 <td>{j.updated_at}</td>
                 <td>

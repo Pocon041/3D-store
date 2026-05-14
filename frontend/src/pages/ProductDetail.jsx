@@ -53,7 +53,7 @@ export default function ProductDetail({ productId }) {
 
   const onDelete = async () => {
     if (!product || product.source !== "user") return;
-    const ok = window.confirm(`确定删除「${product.name}」吗？\n删除后它会从商城和购物车中移除，生成任务文件仍会保留。`);
+    const ok = window.confirm(`确定删除「${product.name}」吗？\n删除后它会从商城、购物车和本地生成记录中移除。`);
     if (!ok) return;
 
     setDeleting(true);
@@ -77,14 +77,14 @@ export default function ProductDetail({ productId }) {
           <Model3DPreview src={product.model_url} poster={product.thumbnail_url} height={560} />
           <div className="viewer-foot">
             <span>3D 预览 · PBR 材质 · 移动端 AR</span>
-            <a href={product.model_url} target="_blank" rel="noreferrer">下载 GLB</a>
+            <a href={product.model_url} target="_blank" rel="noreferrer">下载 3D 文件</a>
           </div>
         </div>
 
         <aside className="detail-info">
           <div className="detail-cat">
             <span>{product.category}</span>
-            <span>{product.model_local ? "Local asset" : "CDN asset"}</span>
+            <span>{product.model_local ? "本地资产" : "在线资产"}</span>
           </div>
           <h1 className="detail-name">{product.name}</h1>
           <div className="detail-price">
@@ -110,7 +110,7 @@ export default function ProductDetail({ productId }) {
               立即购买
             </button>
             {product.tryonable && (
-              <button className="btn-tryon" onClick={() => navigate("/tryon")}>
+              <button className="btn-tryon" onClick={() => navigate(`/tryon?product=${encodeURIComponent(product.id)}`)}>
                 虚拟试穿这件
               </button>
             )}
@@ -145,9 +145,9 @@ export default function ProductDetail({ productId }) {
           <div className="detail-meta">
             <div><span>许可</span>{product.license || "—"}</div>
             <div><span>来源</span>{product.source}</div>
-            <div><span>资产</span>{product.model_local ? "本地" : "CDN"}</div>
+            <div><span>资产</span>{product.model_local ? "本地" : "在线"}</div>
             {product.job_id && (
-              <div><span>任务</span>{product.job_id}</div>
+              <div><span>生成编号</span>{product.job_id}</div>
             )}
           </div>
         </aside>

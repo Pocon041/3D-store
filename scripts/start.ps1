@@ -76,6 +76,14 @@ Set-CacheEnv "TORCH_HOME"              ".cache\torch"
 Set-CacheEnv "PIP_CACHE_DIR"           ".cache\pip"
 Set-CacheEnv "NPM_CONFIG_CACHE"        ".cache\npm"
 Set-CacheEnv "MPLCONFIGDIR"            ".cache\matplotlib"
+Set-CacheEnv "CONDA_PKGS_DIRS"         ".cache\conda\pkgs"
+Set-CacheEnv "CONDA_ENVS_PATH"         ".conda\envs"
+Set-CacheEnv "TEMP"                    ".cache\tmp"
+Set-CacheEnv "TMP"                     ".cache\tmp"
+[Environment]::SetEnvironmentVariable("HF_HUB_DISABLE_XET", "1", "Process")
+if (-not $env:HF_ENDPOINT) {
+    [Environment]::SetEnvironmentVariable("HF_ENDPOINT", "https://hf-mirror.com", "Process")
+}
 Write-Host ("[env] cache root {0}" -f (Join-Path $root ".cache")) -ForegroundColor DarkGray
 
 $BackendHost  = if ($env:BACKEND_HOST)  { $env:BACKEND_HOST }  else { "127.0.0.1" }

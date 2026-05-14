@@ -88,16 +88,14 @@ export default function Model3DPreview({
           <div className="model-overlay-bar">
             <div className="model-overlay-bar-fill" style={{ width: `${progress * 100}%` }} />
           </div>
-          <div className="model-overlay-hint">首次加载会向 CDN 拉取模型，可能耗时 5-15 秒</div>
+          <div className="model-overlay-hint">首次打开可能需要一点时间，请稍候。</div>
         </div>
       )}
       {error && (
         <div className="model-overlay error">
           <div className="model-overlay-text">加载失败</div>
           <div className="model-overlay-hint">{error}</div>
-          <div className="model-overlay-hint">
-            可尝试：刷新页面 / 运行 <code>scripts/fetch_demo_models.py</code> 本地化
-          </div>
+          <div className="model-overlay-hint">可尝试刷新页面，或稍后重新打开。</div>
         </div>
       )}
     </div>

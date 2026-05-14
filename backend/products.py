@@ -29,6 +29,23 @@ _MV = "https://modelviewer.dev/shared-assets/models"
 
 SEED_PRODUCTS: list[dict[str, Any]] = [
     {
+        "id": "custom-seal-plush",
+        "base_id": "56f0c02d0946f971d889abb90163c787",
+        "name": "海豹玩偶",
+        "category": "user-uploads",
+        "price": 199.0,
+        "stock": 10,
+        "description": (
+            "用户自定义导入的海豹玩偶 3D 商品，支持 360 度查看模型体积、轮廓与材质效果。"
+        ),
+        "model_url": f"{config.STATIC_URL_PREFIX}/samples/glb/56f0c02d0946f971d889abb90163c787.glb",
+        "thumbnail_url": None,
+        "license": "User Generated",
+        "source": "local-custom",
+        "tags": ["用户自定义", "玩偶", "海豹", "3D"],
+        "tryonable": False,
+    },
+    {
         "id": "damaged-helmet",
         "name": "战损头盔（典藏 PBR）",
         "category": "collectibles",
@@ -216,6 +233,7 @@ SEED_PRODUCTS: list[dict[str, Any]] = [
         "source": "khronos",
         "tags": ["服饰", "复古", "蕾丝"],
         "tryonable": True,
+        "tryon_category": "upper",
         "avatar_dressable": True,
         "garment_slot": "upper",
     },
@@ -381,7 +399,14 @@ def _user_assets_as_products() -> list[dict[str, Any]]:
                 thumb_url = None
 
         # 默认描述按任务类型生成
-        if record.task_type == "image_to_3d":
+        if record.params.get("kind") == "import_glb":
+            default_desc = (
+                f"商家直接导入的 GLB 3D 模型。"
+                f"GLB 大小 {record.metrics.glb_size_mb or '?'} MB。"
+            )
+            default_name = Path(record.params.get("filename") or "").stem or f"导入 GLB 资产 {record.job_id[:8]}"
+            default_tags = ["GLB", "3D", "导入"]
+        elif record.task_type == "image_to_3d":
             provider = record.outputs.provider or "mock"
             default_desc = (
                 f"由用户在工作台用图片生成的 3D 模型，provider={provider}。"
@@ -406,8 +431,13 @@ def _user_assets_as_products() -> list[dict[str, Any]]:
         tags = p.get("product_tags") or default_tags
         if is_mock and "mock" not in name.lower():
             name = f"[mock] {name}"
+        garment_slot = p.get("garment_slot") or p.get("product_garment_slot")
+        is_apparel = category == "apparel" or garment_slot in {"upper", "lower", "full", "shoes"}
+        tryon_category = p.get("tryon_category") or p.get("product_tryon_category")
+        if not tryon_category and garment_slot:
+            tryon_category = "dress" if garment_slot == "full" else ("lower" if garment_slot == "lower" else "upper")
 
-        items.append({
+        item = {
             "id": f"job-{record.job_id}",
             "name": name,
             "category": category,
@@ -424,7 +454,15 @@ def _user_assets_as_products() -> list[dict[str, Any]]:
             "task_type": record.task_type,
             "model_local": True,
             "published": bool(p.get("published", False)),
-        })
+        }
+        if is_apparel:
+            item.update({
+                "avatar_dressable": True,
+                "garment_slot": garment_slot or "upper",
+                "tryonable": bool(p.get("product_tryonable", bool(thumb_url))),
+                "tryon_category": tryon_category or "upper",
+            })
+        items.append(item)
     return items
 
 

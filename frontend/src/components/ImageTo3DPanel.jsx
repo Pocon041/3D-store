@@ -17,6 +17,13 @@ const CATEGORY_OPTIONS = [
   { key: "apparel", label: "服装" },
 ];
 
+const STATUS_LABELS = {
+  queued: "排队中",
+  running: "生成中",
+  success: "已完成",
+  failed: "失败",
+};
+
 /**
  * 图生 3D 面板：单图上传 -> 选 Provider -> 实时进度 -> 预览 GLB
  *
@@ -40,6 +47,7 @@ export default function ImageTo3DPanel({ onResolved }) {
   // 上架表单
   const [showPublishForm, setShowPublishForm] = useState(false);
   const [publishName, setPublishName] = useState("");
+  const [publishDescription, setPublishDescription] = useState("");
   const [publishPrice, setPublishPrice] = useState("");
   const [publishCategory, setPublishCategory] = useState("user-uploads");
   const [publishStock, setPublishStock] = useState("1");
@@ -113,6 +121,7 @@ export default function ImageTo3DPanel({ onResolved }) {
     setShowPublishForm(false);
     setPublishMsg(null);
     setPublishName("");
+    setPublishDescription("");
     setPublishPrice("");
     setPublishCategory("user-uploads");
     setPublishStock("1");
@@ -126,6 +135,7 @@ export default function ImageTo3DPanel({ onResolved }) {
     try {
       const payload = {};
       if (publishName.trim()) payload.name = publishName.trim();
+      if (publishDescription.trim()) payload.description = publishDescription.trim();
       if (publishPrice && !Number.isNaN(Number(publishPrice))) {
         payload.price = Number(publishPrice);
       }
@@ -150,11 +160,11 @@ export default function ImageTo3DPanel({ onResolved }) {
   const progress = Math.round((job?.progress || 0) * 100);
   const isProcessing = job && job.status !== "success" && job.status !== "failed";
   const providerLabel = (p) => {
-    if (!p) return `服务器默认（${providers.default}）`;
-    if (p === "mock") return "mock（占位立方体，无需 key）";
+    if (!p) return "自动选择";
+    if (p === "mock") return "快速预览";
     if (p === "tripo") return providers.tripo_configured
-      ? "Tripo3D（已配置 key）"
-      : "Tripo3D（未配置 key，将降级 mock）";
+      ? "高质量生成"
+      : "快速预览";
     return p;
   };
 
@@ -176,7 +186,7 @@ export default function ImageTo3DPanel({ onResolved }) {
             </div>
           )}
 
-          <label className="form-label" style={{ marginTop: 12 }}>Provider</label>
+          <label className="form-label" style={{ marginTop: 12 }}>生成方式</label>
           <select
             value={provider}
             onChange={(e) => setProvider(e.target.value)}
@@ -208,33 +218,22 @@ export default function ImageTo3DPanel({ onResolved }) {
           <label className="form-label">3D 结果</label>
           {!job && (
             <div className="placeholder-box">
-              <p>左侧上传图片后开始生成</p>
-              <p className="hint">
-                默认 mock 仅生成占位立方体；配置 <code>TRIPO_API_KEY</code> 后会调用真实 API
-              </p>
+              <p>上传商品图后，即可生成可旋转的 3D 展示资产。</p>
+              <p className="hint">建议使用主体清晰、背景干净、边缘完整的商品图。</p>
             </div>
           )}
 
           {job && (
             <div className="job-progress">
               <div className="job-progress-header">
-                <span className={`tag ${job.status}`}>{job.status}</span>
+                <span className={`tag ${job.status}`}>{STATUS_LABELS[job.status] || job.status}</span>
                 <span className="muted">{job.stage}</span>
                 <span style={{ marginLeft: "auto" }}>{progress}%</span>
               </div>
               <div className="progress-bar">
                 <div className="progress-bar-fill" style={{ width: `${progress}%` }} />
               </div>
-              {job.outputs?.provider && (
-                <p className="muted small">provider: {job.outputs.provider}</p>
-              )}
               {job.error && <p className="error-message">{job.error}</p>}
-              {job.log_tail && job.log_tail.length > 0 && (
-                <details className="log-tail">
-                  <summary>日志（最近 {job.log_tail.length} 行）</summary>
-                  <pre>{job.log_tail.join("\n")}</pre>
-                </details>
-              )}
             </div>
           )}
 
@@ -259,7 +258,14 @@ export default function ImageTo3DPanel({ onResolved }) {
                     type="text"
                     value={publishName}
                     onChange={(e) => setPublishName(e.target.value)}
-                    placeholder={`AIGC 单图 3D · ${job.job_id.slice(0, 8)}`}
+                    placeholder="例如：轻奢陶瓷香薰摆件"
+                  />
+                  <label className="form-label">商品简介（可选）</label>
+                  <textarea
+                    value={publishDescription}
+                    onChange={(e) => setPublishDescription(e.target.value)}
+                    rows={4}
+                    placeholder="补充材质、尺寸、适用场景或卖点。留空时会使用系统自动生成的简介。"
                   />
                   <div className="publish-row">
                     <div>

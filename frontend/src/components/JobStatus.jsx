@@ -2,6 +2,17 @@ import React, { useEffect, useRef, useState } from "react";
 import { getJob } from "../api.js";
 
 const TERMINAL = new Set(["success", "failed"]);
+const STATUS_LABELS = {
+  queued: "排队中",
+  running: "生成中",
+  success: "已完成",
+  failed: "失败",
+};
+const TASK_LABELS = {
+  image_to_3d: "单图生成",
+  reconstruct: "高级重建",
+  tryon: "虚拟试穿",
+};
 
 export default function JobStatus({ jobId, onResolved }) {
   const [job, setJob] = useState(null);
@@ -48,22 +59,17 @@ export default function JobStatus({ jobId, onResolved }) {
   return (
     <div>
       <div style={{ marginBottom: 8 }}>
-        <span className={`tag ${job.status}`}>{job.status}</span>
-        <span className="tag">{job.task_type}</span>
+        <span className={`tag ${job.status}`}>{STATUS_LABELS[job.status] || job.status}</span>
+        <span className="tag">{TASK_LABELS[job.task_type] || job.task_type}</span>
         {job.stage && <span className="tag">{job.stage}</span>}
         <span style={{ color: "#888", fontSize: 12, marginLeft: 6 }}>
-          job_id: {job.job_id}
+          编号：{job.job_id}
         </span>
       </div>
       <div style={{ fontSize: 13, color: "#444", marginBottom: 8 }}>
         进度：{Math.round((job.progress || 0) * 100)}%
         {job.error && <span style={{ color: "#b6212c", marginLeft: 12 }}>错误：{job.error}</span>}
       </div>
-      {job.log_tail && job.log_tail.length > 0 && (
-        <div className="log">
-          {job.log_tail.slice(-12).join("\n")}
-        </div>
-      )}
     </div>
   );
 }
