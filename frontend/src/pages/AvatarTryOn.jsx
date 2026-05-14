@@ -31,6 +31,133 @@ const DEFAULT_TRANSFORM = {
   customRotationY: 0,
 };
 
+const DEFAULT_POSE = {
+  headYaw: 0,
+  headPitch: 0,
+  headRoll: 0,
+  torsoLean: 0,
+  torsoTwist: 0,
+  torsoSide: 0,
+  hipsTilt: 0,
+  hipsTwist: 0,
+  hipsSide: 0,
+  leftShoulderSpread: 0,
+  rightShoulderSpread: 0,
+  leftArmSpread: 0,
+  rightArmSpread: 0,
+  leftArmForward: 0,
+  rightArmForward: 0,
+  leftArmTwist: 0,
+  rightArmTwist: 0,
+  leftElbowBend: 0,
+  rightElbowBend: 0,
+  leftLegForward: 0,
+  rightLegForward: 0,
+  leftLegSide: 0,
+  rightLegSide: 0,
+  leftLegTwist: 0,
+  rightLegTwist: 0,
+  leftKneeBend: 0,
+  rightKneeBend: 0,
+  leftFootPitch: 0,
+  rightFootPitch: 0,
+  leftFootRoll: 0,
+  rightFootRoll: 0,
+};
+
+const POSE_PRESETS = [
+  { key: "neutral", label: "自然站姿", values: {} },
+  {
+    key: "relaxed",
+    label: "放松垂臂",
+    values: {
+      leftArmSpread: -18,
+      rightArmSpread: -18,
+      leftArmForward: 8,
+      rightArmForward: 8,
+      leftElbowBend: 8,
+      rightElbowBend: 8,
+    },
+  },
+  {
+    key: "a-pose",
+    label: "A 字手臂",
+    values: {
+      leftArmSpread: -32,
+      rightArmSpread: -32,
+      leftArmForward: 2,
+      rightArmForward: 2,
+    },
+  },
+  {
+    key: "editorial",
+    label: "陈列侧身",
+    values: {
+      headYaw: -10,
+      torsoTwist: -8,
+      hipsTwist: 6,
+      leftArmSpread: -22,
+      rightArmSpread: -14,
+      leftElbowBend: 12,
+      rightElbowBend: 6,
+      leftLegForward: -4,
+      rightLegForward: 5,
+      leftKneeBend: 4,
+    },
+  },
+];
+
+const POSE_GROUPS = [
+  {
+    key: "upper",
+    label: "头身",
+    fields: [
+      { key: "headYaw", label: "头部左右", min: -35, max: 35 },
+      { key: "headPitch", label: "头部俯仰", min: -25, max: 25 },
+      { key: "headRoll", label: "头部倾斜", min: -20, max: 20 },
+      { key: "torsoLean", label: "躯干前后", min: -18, max: 18 },
+      { key: "torsoTwist", label: "躯干旋转", min: -28, max: 28 },
+      { key: "torsoSide", label: "躯干侧倾", min: -18, max: 18 },
+      { key: "hipsTwist", label: "髋部旋转", min: -22, max: 22 },
+    ],
+  },
+  {
+    key: "arms",
+    label: "手臂",
+    fields: [
+      { key: "leftArmSpread", label: "左臂开合", min: -80, max: 80 },
+      { key: "rightArmSpread", label: "右臂开合", min: -80, max: 80 },
+      { key: "leftArmForward", label: "左臂前后", min: -70, max: 70 },
+      { key: "rightArmForward", label: "右臂前后", min: -70, max: 70 },
+      { key: "leftElbowBend", label: "左肘弯曲", min: -5, max: 120 },
+      { key: "rightElbowBend", label: "右肘弯曲", min: -5, max: 120 },
+      { key: "leftArmTwist", label: "左臂扭转", min: -55, max: 55 },
+      { key: "rightArmTwist", label: "右臂扭转", min: -55, max: 55 },
+    ],
+  },
+  {
+    key: "legs",
+    label: "腿脚",
+    fields: [
+      { key: "leftLegForward", label: "左腿前后", min: -45, max: 45 },
+      { key: "rightLegForward", label: "右腿前后", min: -45, max: 45 },
+      { key: "leftLegSide", label: "左腿侧摆", min: -35, max: 35 },
+      { key: "rightLegSide", label: "右腿侧摆", min: -35, max: 35 },
+      { key: "leftKneeBend", label: "左膝弯曲", min: -5, max: 100 },
+      { key: "rightKneeBend", label: "右膝弯曲", min: -5, max: 100 },
+      { key: "leftFootPitch", label: "左脚俯仰", min: -35, max: 35 },
+      { key: "rightFootPitch", label: "右脚俯仰", min: -35, max: 35 },
+    ],
+  },
+];
+
+const CONTROL_PANELS = [
+  { key: "garment", label: "服装", hint: "选择款式" },
+  { key: "fit", label: "贴合", hint: "位置尺寸" },
+  { key: "pose", label: "姿态", hint: "骨骼角度" },
+  { key: "scene", label: "场景", hint: "人台外观" },
+];
+
 function makeSlotMap(valueFactory) {
   return Object.fromEntries(GARMENT_SLOTS.map((slot) => [slot.key, valueFactory(slot)]));
 }
@@ -111,9 +238,12 @@ export default function AvatarTryOn() {
   const [showGrid, setShowGrid] = useState(true);
 
   const [activeAdjustSlot, setActiveAdjustSlot] = useState("upper");
+  const [activeControlPanel, setActiveControlPanel] = useState("garment");
   const [slotTransforms, setSlotTransforms] = useState(() => (
     makeSlotMap(() => ({ ...DEFAULT_TRANSFORM }))
   ));
+  const [activePoseGroup, setActivePoseGroup] = useState("upper");
+  const [poseControls, setPoseControls] = useState(() => ({ ...DEFAULT_POSE }));
 
   // 自定义 mannequin GLB（覆盖默认 Xbot）
   const [mannequinFile, setMannequinFile] = useState(null);
@@ -220,12 +350,14 @@ export default function AvatarTryOn() {
     ghostBody,
     showGrid,
     slotTransforms,
+    poseControls,
   }), [
     mannequinFileUrl,
     bodyColor,
     ghostBody,
     showGrid,
     slotTransforms,
+    poseControls,
   ]);
 
   const activeTransform = slotTransforms[activeAdjustSlot] || DEFAULT_TRANSFORM;
@@ -233,6 +365,7 @@ export default function AvatarTryOn() {
   const activeSlotOptions = slotOptions[activeAdjustSlot] || [];
   const activeSlotGarment = garments[activeAdjustSlot] || null;
   const selectedCount = GARMENT_SLOTS.filter((slot) => garments[slot.key]).length;
+  const activePose = POSE_GROUPS.find((group) => group.key === activePoseGroup) || POSE_GROUPS[0];
 
   const updateSlotTransform = (key, value) => {
     setSlotTransforms((prev) => ({
@@ -249,6 +382,21 @@ export default function AvatarTryOn() {
       ...prev,
       [activeAdjustSlot]: { ...DEFAULT_TRANSFORM },
     }));
+  };
+
+  const updatePoseControl = (key, value) => {
+    setPoseControls((prev) => ({
+      ...prev,
+      [key]: value,
+    }));
+  };
+
+  const applyPosePreset = (preset) => {
+    setPoseControls({ ...DEFAULT_POSE, ...preset.values });
+  };
+
+  const resetPose = () => {
+    setPoseControls({ ...DEFAULT_POSE });
   };
 
   const clearSlot = (slotKey) => {
@@ -304,6 +452,21 @@ export default function AvatarTryOn() {
         </div>
 
         <aside className="avatar-controls">
+          <div className="control-mode-tabs" role="tablist" aria-label="换装控制面板">
+            {CONTROL_PANELS.map((panel) => (
+              <button
+                key={panel.key}
+                type="button"
+                className={activeControlPanel === panel.key ? "active" : ""}
+                onClick={() => setActiveControlPanel(panel.key)}
+              >
+                <strong>{panel.label}</strong>
+                <span>{panel.hint}</span>
+              </button>
+            ))}
+          </div>
+
+          {activeControlPanel === "garment" && (
           <section className="control-block">
             <div className="control-block-title">
               <span>1</span>
@@ -394,7 +557,9 @@ export default function AvatarTryOn() {
 
             {productError && <div className="error-message compact">商品资产读取失败：{productError}</div>}
           </section>
+          )}
 
+          {activeControlPanel === "fit" && (
           <section className="control-block">
             <div className="control-block-title">
               <span>2</span>
@@ -443,10 +608,70 @@ export default function AvatarTryOn() {
               重置{activeSlot.label}
             </button>
           </section>
+          )}
 
+          {activeControlPanel === "pose" && (
           <section className="control-block">
             <div className="control-block-title">
               <span>3</span>
+              <div>
+                <h2>人台姿态</h2>
+                <p>先选一个姿态预设，再按部位微调骨骼角度。</p>
+              </div>
+            </div>
+
+            <div className="pose-preset-grid">
+              {POSE_PRESETS.map((preset) => (
+                <button
+                  key={preset.key}
+                  type="button"
+                  onClick={() => applyPosePreset(preset)}
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="pose-group-tabs" role="tablist" aria-label="人台姿态部位">
+              {POSE_GROUPS.map((group) => (
+                <button
+                  key={group.key}
+                  type="button"
+                  className={activePoseGroup === group.key ? "active" : ""}
+                  onClick={() => setActivePoseGroup(group.key)}
+                >
+                  {group.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="pose-slider-list">
+              {activePose.fields.map((field) => (
+                <div className="slider-field pose-slider" key={field.key}>
+                  <span>{field.label}</span>
+                  <input
+                    type="range"
+                    min={field.min}
+                    max={field.max}
+                    step="1"
+                    value={poseControls[field.key] ?? 0}
+                    onChange={(e) => updatePoseControl(field.key, Number(e.target.value))}
+                  />
+                  <strong>{poseControls[field.key] ?? 0}°</strong>
+                </div>
+              ))}
+            </div>
+
+            <button className="secondary" onClick={resetPose}>
+              重置人台姿态
+            </button>
+          </section>
+          )}
+
+          {activeControlPanel === "scene" && (
+          <section className="control-block">
+            <div className="control-block-title">
+              <span>4</span>
               <div>
                 <h2>人台与场景</h2>
                 <p>按品牌陈列需要调整底色、参考线和人台透明度。</p>
@@ -489,6 +714,7 @@ export default function AvatarTryOn() {
               </button>
             )}
           </section>
+          )}
         </aside>
       </section>
 

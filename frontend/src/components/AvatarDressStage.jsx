@@ -43,6 +43,27 @@ const DEFAULT_MANNEQUIN_URL = "/static/samples/avatars/mannequin.glb";
 const TARGET_BODY_HEIGHT = 1.75; // 单位：米
 let sharedDracoLoader = null;
 
+const BONE_ALIASES = {
+  hips: ["mixamorig:Hips", "Hips"],
+  spine: ["mixamorig:Spine", "Spine"],
+  spine1: ["mixamorig:Spine1", "Spine1"],
+  spine2: ["mixamorig:Spine2", "Spine2"],
+  neck: ["mixamorig:Neck", "Neck"],
+  head: ["mixamorig:Head", "Head"],
+  leftShoulder: ["mixamorig:LeftShoulder", "LeftShoulder"],
+  leftArm: ["mixamorig:LeftArm", "LeftArm"],
+  leftForeArm: ["mixamorig:LeftForeArm", "LeftForeArm"],
+  rightShoulder: ["mixamorig:RightShoulder", "RightShoulder"],
+  rightArm: ["mixamorig:RightArm", "RightArm"],
+  rightForeArm: ["mixamorig:RightForeArm", "RightForeArm"],
+  leftUpLeg: ["mixamorig:LeftUpLeg", "LeftUpLeg"],
+  leftLeg: ["mixamorig:LeftLeg", "LeftLeg"],
+  leftFoot: ["mixamorig:LeftFoot", "LeftFoot"],
+  rightUpLeg: ["mixamorig:RightUpLeg", "RightUpLeg"],
+  rightLeg: ["mixamorig:RightLeg", "RightLeg"],
+  rightFoot: ["mixamorig:RightFoot", "RightFoot"],
+};
+
 function createGltfLoader() {
   const loader = new GLTFLoader();
   if (!sharedDracoLoader) {
@@ -97,6 +118,72 @@ function applyBodyTint(model, color, ghost) {
       m.needsUpdate = true;
     });
   });
+}
+
+function findBone(model, aliases) {
+  let found = null;
+  model.traverse((obj) => {
+    if (found || !obj.isBone) return;
+    if (aliases.includes(obj.name) || aliases.some((name) => obj.name.endsWith(name))) {
+      found = obj;
+    }
+  });
+  return found;
+}
+
+function capturePoseBones(model) {
+  const bones = {};
+  Object.entries(BONE_ALIASES).forEach(([key, aliases]) => {
+    const bone = findBone(model, aliases);
+    if (bone) {
+      bones[key] = {
+        bone,
+        rest: bone.quaternion.clone(),
+      };
+    }
+  });
+  return bones;
+}
+
+function addBoneRotation(entry, x = 0, y = 0, z = 0) {
+  if (!entry) return;
+  const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(x, y, z, "XYZ"));
+  entry.bone.quaternion.multiply(q);
+  entry.bone.updateMatrixWorld(true);
+}
+
+function deg(value) {
+  return THREE.MathUtils.degToRad(Number(value || 0));
+}
+
+function applyMannequinPose(model, pose = {}) {
+  if (!model.userData.__poseBones) {
+    model.userData.__poseBones = capturePoseBones(model);
+  }
+  const bones = model.userData.__poseBones;
+  Object.values(bones).forEach((entry) => entry.bone.quaternion.copy(entry.rest));
+
+  addBoneRotation(bones.hips, deg(pose.hipsTilt), deg(pose.hipsTwist), deg(pose.hipsSide));
+  addBoneRotation(bones.spine, deg(pose.torsoLean) * 0.35, deg(pose.torsoTwist) * 0.25, deg(pose.torsoSide) * 0.35);
+  addBoneRotation(bones.spine1, deg(pose.torsoLean) * 0.35, deg(pose.torsoTwist) * 0.35, deg(pose.torsoSide) * 0.35);
+  addBoneRotation(bones.spine2, deg(pose.torsoLean) * 0.3, deg(pose.torsoTwist) * 0.4, deg(pose.torsoSide) * 0.3);
+  addBoneRotation(bones.neck, deg(pose.headPitch) * 0.35, deg(pose.headYaw) * 0.25, deg(pose.headRoll) * 0.25);
+  addBoneRotation(bones.head, deg(pose.headPitch) * 0.65, deg(pose.headYaw) * 0.75, deg(pose.headRoll) * 0.75);
+
+  // Additive rotations relative to the bundled Mixamo rest pose.
+  addBoneRotation(bones.leftShoulder, 0, deg(pose.leftShoulderSpread) * 0.35, deg(pose.leftArmSpread) * 0.2);
+  addBoneRotation(bones.rightShoulder, 0, -deg(pose.rightShoulderSpread) * 0.35, -deg(pose.rightArmSpread) * 0.2);
+  addBoneRotation(bones.leftArm, deg(pose.leftArmForward), deg(pose.leftArmTwist), deg(pose.leftArmSpread));
+  addBoneRotation(bones.rightArm, deg(pose.rightArmForward), deg(pose.rightArmTwist), -deg(pose.rightArmSpread));
+  addBoneRotation(bones.leftForeArm, deg(pose.leftElbowBend), 0, 0);
+  addBoneRotation(bones.rightForeArm, deg(pose.rightElbowBend), 0, 0);
+
+  addBoneRotation(bones.leftUpLeg, deg(pose.leftLegForward), deg(pose.leftLegTwist), deg(pose.leftLegSide));
+  addBoneRotation(bones.rightUpLeg, deg(pose.rightLegForward), deg(pose.rightLegTwist), -deg(pose.rightLegSide));
+  addBoneRotation(bones.leftLeg, deg(pose.leftKneeBend), 0, 0);
+  addBoneRotation(bones.rightLeg, deg(pose.rightKneeBend), 0, 0);
+  addBoneRotation(bones.leftFoot, deg(pose.leftFootPitch), 0, deg(pose.leftFootRoll));
+  addBoneRotation(bones.rightFoot, deg(pose.rightFootPitch), 0, -deg(pose.rightFootRoll));
 }
 
 function fitMannequin(model) {
@@ -397,6 +484,7 @@ const AvatarDressStage = forwardRef(function AvatarDressStage(
           BODY_COLORS[settings.bodyColor] || BODY_COLORS.porcelain,
           !!settings.ghostBody,
         );
+        applyMannequinPose(model, settings.poseControls);
         scene.add(model);
         mannequinRef.current = { group: model, anchors };
 
@@ -435,6 +523,12 @@ const AvatarDressStage = forwardRef(function AvatarDressStage(
   useEffect(() => {
     if (gridRef.current) gridRef.current.visible = !!settings.showGrid;
   }, [settings.showGrid]);
+
+  // ---- 更新 mannequin 骨骼姿态（不重载 GLB） ----
+  useEffect(() => {
+    if (!mannequinRef.current) return;
+    applyMannequinPose(mannequinRef.current.group, settings.poseControls);
+  }, [settings.poseControls]);
 
   // ---- 加载 / 切换 服装 GLB（四个槽位可同时存在） ----
   useEffect(() => {

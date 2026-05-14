@@ -98,8 +98,8 @@ export default function Shop() {
       <section className="hero">
         <div className="hero-text">
           <div className="hero-eyebrow">AIGC 3D COMMERCE</div>
-          <h1>把商品放到顾客手里，再让他们下单</h1>
-          <p>从单图、多视角到可交互 GLB 资产，商城、工作台和虚拟试穿在同一个体验里闭环。</p>
+          <h1>AIGC 3D MALL</h1>
+          <p>3D 商品展示与虚拟试穿，一站完成。</p>
           <div className="hero-actions">
             <button className="hero-primary" onClick={() => navigate("/studio")}>
               生成 3D 商品
