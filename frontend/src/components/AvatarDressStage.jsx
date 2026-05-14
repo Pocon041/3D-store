@@ -3,11 +3,35 @@ import React, {
   useEffect,
   useImperativeHandle,
   useRef,
+  useState,
 } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 
+/**
+ * 3D 试穿舞台。
+ *
+ * 与旧版差异：
+ * - 旧版用 LatheGeometry + CapsuleGeometry 拼一个"假人台"，手臂只是两根胶囊，看着完全不像人。
+ *   新版改成加载真实的 rigged GLB（默认是 three.js 官方的 Xbot.glb，带 mixamorig 骨骼），
+ *   通过 `scripts/fetch_avatar.py` 拉到 data/samples/avatars/mannequin.glb。
+ * - 移除了 GARMENT_PRESETS 内置服装；舞台只渲染上传 / 选中的 GLB。
+ * - 服装 GLB 不再要求用户手动调一堆位置滑块：根据 bbox 比例自动判定上装 / 下装 / 全身，
+ *   并对齐到 mannequin 的肩部 / 腰部 / 全身锚点。用户保留的滑块只是微调。
+ *
+ * Props:
+ *   - settings.mannequinUrl       string  默认 /static/samples/avatars/mannequin.glb，可被用户上传覆盖
+ *   - settings.bodyColor          string  body 着色键（porcelain / graphite / warm / studio）
+ *   - settings.ghostBody          bool    人台半透明
+ *   - settings.showGrid           bool    是否显示地面参考线
+ *   - settings.slotTransforms     每个槽位的缩放 / 位移 / 旋转微调
+ *   - garments                    { upper, lower, full, shoes } 四个可同时叠加的 GLB
+ */
+
+const GARMENT_SLOTS = ["upper", "lower", "full", "shoes"];
+const DRACO_DECODER_PATH = "/draco/gltf/";
 const BODY_COLORS = {
   porcelain: 0xe8ded2,
   graphite: 0x343b45,
@@ -15,99 +39,32 @@ const BODY_COLORS = {
   studio: 0xb8c1cc,
 };
 
-const GARMENT_PRESETS = {
-  tee: { label: "短袖 T 恤", layer: "upper" },
-  jacket: { label: "廓形外套", layer: "upper" },
-  hoodie: { label: "连帽卫衣", layer: "upper" },
-  dress: { label: "连衣裙", layer: "full" },
-  pants: { label: "直筒长裤", layer: "lower" },
-};
+const DEFAULT_MANNEQUIN_URL = "/static/samples/avatars/mannequin.glb";
+const TARGET_BODY_HEIGHT = 1.75; // 单位：米
+let sharedDracoLoader = null;
 
-function makeMat({ color, material, opacity = 1, roughness = 0.58 }) {
-  const mat = new THREE.MeshStandardMaterial({
-    color,
-    roughness,
-    metalness: 0.02,
-    transparent: opacity < 1,
-    opacity,
-    side: THREE.DoubleSide,
-  });
-  if (material === "satin") {
-    mat.roughness = 0.28;
-    mat.metalness = 0.08;
-  } else if (material === "denim") {
-    mat.roughness = 0.86;
-    mat.metalness = 0.0;
-  } else if (material === "technical") {
-    mat.roughness = 0.42;
-    mat.metalness = 0.18;
+function createGltfLoader() {
+  const loader = new GLTFLoader();
+  if (!sharedDracoLoader) {
+    sharedDracoLoader = new DRACOLoader();
+    sharedDracoLoader.setDecoderPath(DRACO_DECODER_PATH);
+    sharedDracoLoader.setDecoderConfig({ type: "wasm" });
   }
-  return mat;
+  loader.setDRACOLoader(sharedDracoLoader);
+  return loader;
 }
 
-function capsule(radius, length, material, position, rotation = [0, 0, 0], scale = [1, 1, 1]) {
-  const mesh = new THREE.Mesh(new THREE.CapsuleGeometry(radius, length, 16, 24), material);
-  mesh.position.set(...position);
-  mesh.rotation.set(...rotation);
-  mesh.scale.set(...scale);
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
-  return mesh;
-}
-
-function cylinder(radiusTop, radiusBottom, height, material, position, radial = 48) {
-  const mesh = new THREE.Mesh(
-    new THREE.CylinderGeometry(radiusTop, radiusBottom, height, radial, 1, false),
-    material,
-  );
-  mesh.position.set(...position);
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
-  return mesh;
-}
-
-function box(size, material, position, rotation = [0, 0, 0]) {
-  const mesh = new THREE.Mesh(new THREE.BoxGeometry(...size), material);
-  mesh.position.set(...position);
-  mesh.rotation.set(...rotation);
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
-  return mesh;
-}
-
-function sphere(radius, material, position, scale = [1, 1, 1]) {
-  const mesh = new THREE.Mesh(new THREE.SphereGeometry(radius, 32, 24), material);
-  mesh.position.set(...position);
-  mesh.scale.set(...scale);
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
-  return mesh;
-}
-
-function latheBody(points, material, position, scale = [1, 1, 1]) {
-  const geom = new THREE.LatheGeometry(
-    points.map(([radius, y]) => new THREE.Vector2(radius, y)),
-    64,
-  );
-  const mesh = new THREE.Mesh(geom, material);
-  mesh.position.set(...position);
-  mesh.scale.set(...scale);
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
-  return mesh;
-}
-
-function addSeam(group, from, to, color = 0xf8fafc) {
-  const geom = new THREE.BufferGeometry().setFromPoints([
-    new THREE.Vector3(...from),
-    new THREE.Vector3(...to),
-  ]);
-  const line = new THREE.Line(
-    geom,
-    new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.62 }),
-  );
-  group.add(line);
-}
+// mannequin 解剖锚点（占身高百分比）。Xbot.glb 大致符合，真人 GLB 偏差也不大。
+const ANCHOR_RATIOS = {
+  foot: 0.0,
+  knee: 0.26,
+  hip: 0.51,
+  waist: 0.58,
+  shoulder: 0.82,
+  neck: 0.86,
+  head: 0.94,
+  top: 1.0,
+};
 
 function disposeObject(root) {
   if (!root) return;
@@ -123,220 +80,203 @@ function disposeObject(root) {
   });
 }
 
-function buildMannequin(settings) {
-  const {
-    bodyColor,
-    heightScale,
-    shoulderScale,
-    waistScale,
-    ghostBody,
-    pose,
-  } = settings;
-  const group = new THREE.Group();
-  group.name = "mannequin";
-  group.scale.set(1, heightScale, 1);
-
-  const bodyMat = makeMat({
-    color: BODY_COLORS[bodyColor] || BODY_COLORS.porcelain,
-    material: "matte",
-    opacity: ghostBody ? 0.48 : 1,
-    roughness: 0.72,
+function applyBodyTint(model, color, ghost) {
+  const target = new THREE.Color(color);
+  model.traverse((obj) => {
+    if (!obj.isMesh || !obj.material) return;
+    const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+    mats.forEach((m) => {
+      if (!m) return;
+      if (!m.userData.__origColor) {
+        m.userData.__origColor = m.color ? m.color.clone() : new THREE.Color(0xffffff);
+      }
+      // 仅微调主色调，避免完全覆盖贴图
+      if (m.color) m.color.copy(target).lerp(m.userData.__origColor, 0.55);
+      m.transparent = ghost;
+      m.opacity = ghost ? 0.55 : 1.0;
+      m.needsUpdate = true;
+    });
   });
-
-  const shoulder = shoulderScale;
-  const waist = waistScale;
-  const armTilt = pose === "a" ? 0.48 : pose === "relaxed" ? 0.28 : 0.18;
-  const legSpread = pose === "runway" ? 0.11 : 0.17;
-  const hipWidth = 0.38 * waist;
-  const torsoProfile = [
-    [0.16, 0.00],
-    [0.28, 0.08],
-    [0.34, 0.22],
-    [0.29, 0.48],
-    [0.34, 0.76],
-    [0.42, 0.98],
-    [0.31, 1.12],
-    [0.13, 1.22],
-  ];
-
-  group.add(latheBody(torsoProfile, bodyMat, [0, 1.28, 0], [shoulder, 1, 0.62]));
-  group.add(sphere(0.31, bodyMat, [0, 1.28, 0], [waist * 1.32, 0.58, 0.82]));
-  group.add(capsule(0.07, 0.18, bodyMat, [0, 2.53, 0], [0, 0, 0]));
-  group.add(sphere(0.22, bodyMat, [0, 2.79, 0], [0.78, 1.12, 0.9]));
-
-  group.add(capsule(0.095, 0.55, bodyMat, [-0.46 * shoulder, 2.08, 0], [0, 0, armTilt]));
-  group.add(capsule(0.095, 0.55, bodyMat, [0.46 * shoulder, 2.08, 0], [0, 0, -armTilt]));
-  group.add(capsule(0.072, 0.58, bodyMat, [-0.63 * shoulder, 1.54, 0], [0, 0, armTilt * 0.72]));
-  group.add(capsule(0.072, 0.58, bodyMat, [0.63 * shoulder, 1.54, 0], [0, 0, -armTilt * 0.72]));
-  group.add(sphere(0.072, bodyMat, [-0.74 * shoulder, 1.12, 0], [0.78, 1.08, 0.7]));
-  group.add(sphere(0.072, bodyMat, [0.74 * shoulder, 1.12, 0], [0.78, 1.08, 0.7]));
-
-  group.add(capsule(0.12, 0.58, bodyMat, [-legSpread, 0.98, 0], [0, 0, -0.03], [0.9, 1, 0.86]));
-  group.add(capsule(0.12, 0.58, bodyMat, [legSpread, 0.98, 0], [0, 0, 0.03], [0.9, 1, 0.86]));
-  group.add(capsule(0.085, 0.62, bodyMat, [-legSpread * 0.96, 0.37, 0], [0, 0, -0.02], [0.82, 1, 0.78]));
-  group.add(capsule(0.085, 0.62, bodyMat, [legSpread * 0.96, 0.37, 0], [0, 0, 0.02], [0.82, 1, 0.78]));
-  group.add(sphere(0.095, bodyMat, [-legSpread * 0.95, 0.05, 0.05], [1.45, 0.44, 1.9]));
-  group.add(sphere(0.095, bodyMat, [legSpread * 0.95, 0.05, 0.05], [1.45, 0.44, 1.9]));
-  group.add(sphere(0.06, bodyMat, [-hipWidth, 1.85, 0], [1, 1, 1]));
-  group.add(sphere(0.06, bodyMat, [hipWidth, 1.85, 0], [1, 1, 1]));
-
-  const base = cylinder(0.42, 0.5, 0.08, makeMat({ color: 0x1f2937, material: "matte" }), [0, 0.02, 0], 64);
-  base.receiveShadow = true;
-  group.add(base);
-  return group;
 }
 
-function sleeve(group, side, mat, shoulderScale, color) {
-  const x = side * 0.51 * shoulderScale;
-  const rot = side > 0 ? -0.36 : 0.36;
-  group.add(capsule(0.105, 0.6, mat, [x, 1.98, 0], [0, 0, rot]));
-  addSeam(group, [side * 0.38 * shoulderScale, 2.23, 0.08], [side * 0.66 * shoulderScale, 1.7, 0.08], color);
-}
+function fitMannequin(model) {
+  // 先 reset
+  model.position.set(0, 0, 0);
+  model.rotation.set(0, 0, 0);
+  model.scale.set(1, 1, 1);
 
-function buildGarment(settings) {
-  const {
-    garment,
-    garmentColor,
-    garmentMaterial,
-    shoulderScale,
-    waistScale,
-    heightScale,
-    showSeams,
-  } = settings;
-  const group = new THREE.Group();
-  group.name = "garment";
-  group.scale.set(1, heightScale, 1);
-
-  const mat = makeMat({ color: garmentColor, material: garmentMaterial });
-  const dark = new THREE.Color(garmentColor).multiplyScalar(0.72).getHex();
-  const seam = 0xffffff;
-  const shoulder = shoulderScale;
-  const waist = waistScale;
-
-  if (garment === "tee") {
-    group.add(cylinder(0.46 * shoulder, 0.36 * waist, 0.86, mat, [0, 1.92, 0], 64));
-    sleeve(group, -1, mat, shoulder, seam);
-    sleeve(group, 1, mat, shoulder, seam);
-    group.add(cylinder(0.23, 0.25, 0.035, makeMat({ color: dark, material: garmentMaterial }), [0, 2.39, 0], 48));
-    if (showSeams) {
-      addSeam(group, [-0.35 * shoulder, 2.31, 0.12], [-0.26 * waist, 1.5, 0.12], seam);
-      addSeam(group, [0.35 * shoulder, 2.31, 0.12], [0.26 * waist, 1.5, 0.12], seam);
-    }
-  }
-
-  if (garment === "jacket") {
-    group.add(cylinder(0.52 * shoulder, 0.42 * waist, 1.06, mat, [0, 1.88, 0], 64));
-    group.add(capsule(0.12, 0.84, mat, [-0.56 * shoulder, 1.88, 0], [0, 0, 0.26]));
-    group.add(capsule(0.12, 0.84, mat, [0.56 * shoulder, 1.88, 0], [0, 0, -0.26]));
-    group.add(box([0.18, 0.62, 0.035], makeMat({ color: dark, material: garmentMaterial }), [-0.11, 1.92, 0.36], [0, 0, -0.18]));
-    group.add(box([0.18, 0.62, 0.035], makeMat({ color: dark, material: garmentMaterial }), [0.11, 1.92, 0.36], [0, 0, 0.18]));
-    if (showSeams) {
-      addSeam(group, [0, 2.38, 0.39], [0, 1.35, 0.39], seam);
-      addSeam(group, [-0.44 * shoulder, 2.28, 0.1], [0.44 * shoulder, 2.28, 0.1], seam);
-    }
-  }
-
-  if (garment === "hoodie") {
-    group.add(cylinder(0.5 * shoulder, 0.43 * waist, 1.02, mat, [0, 1.86, 0], 64));
-    group.add(capsule(0.12, 0.78, mat, [-0.55 * shoulder, 1.86, 0], [0, 0, 0.28]));
-    group.add(capsule(0.12, 0.78, mat, [0.55 * shoulder, 1.86, 0], [0, 0, -0.28]));
-    const hood = new THREE.Mesh(
-      new THREE.TorusGeometry(0.27, 0.07, 16, 48),
-      mat,
-    );
-    hood.position.set(0, 2.54, -0.09);
-    hood.rotation.x = Math.PI / 2;
-    hood.castShadow = true;
-    group.add(hood);
-    group.add(box([0.34, 0.18, 0.05], makeMat({ color: dark, material: garmentMaterial }), [0, 1.68, 0.39]));
-    if (showSeams) addSeam(group, [0, 2.28, 0.4], [0, 1.34, 0.4], seam);
-  }
-
-  if (garment === "dress") {
-    group.add(cylinder(0.42 * shoulder, 0.32 * waist, 0.58, mat, [0, 2.12, 0], 64));
-    group.add(cylinder(0.32 * waist, 0.68, 1.08, mat, [0, 1.36, 0], 64));
-    sleeve(group, -1, mat, shoulder, seam);
-    sleeve(group, 1, mat, shoulder, seam);
-    group.add(cylinder(0.68, 0.7, 0.035, makeMat({ color: dark, material: garmentMaterial }), [0, 0.82, 0], 64));
-    if (showSeams) {
-      addSeam(group, [-0.18, 1.85, 0.42], [-0.52, 0.84, 0.42], seam);
-      addSeam(group, [0.18, 1.85, 0.42], [0.52, 0.84, 0.42], seam);
-    }
-  }
-
-  if (garment === "pants") {
-    group.add(cylinder(0.32 * waist, 0.33 * waist, 0.18, mat, [0, 1.25, 0], 48));
-    group.add(capsule(0.17, 1.12, mat, [-0.16, 0.67, 0], [0, 0, -0.02]));
-    group.add(capsule(0.17, 1.12, mat, [0.16, 0.67, 0], [0, 0, 0.02]));
-    group.add(cylinder(0.18, 0.18, 0.04, makeMat({ color: dark, material: garmentMaterial }), [-0.16, 0.06, 0], 36));
-    group.add(cylinder(0.18, 0.18, 0.04, makeMat({ color: dark, material: garmentMaterial }), [0.16, 0.06, 0], 36));
-    if (showSeams) {
-      addSeam(group, [0, 1.25, 0.2], [0, 0.12, 0.2], seam);
-      addSeam(group, [-0.27, 1.08, 0.12], [-0.24, 0.15, 0.12], seam);
-      addSeam(group, [0.27, 1.08, 0.12], [0.24, 0.15, 0.12], seam);
-    }
-  }
-
-  const preset = GARMENT_PRESETS[garment] || GARMENT_PRESETS.tee;
-  group.userData.layer = preset.layer;
-  return group;
-}
-
-function fitCustomModel(model, settings) {
-  const box = model.userData.fitBox || new THREE.Box3().setFromObject(model);
-  const size = model.userData.fitSize || new THREE.Vector3();
-  const center = model.userData.fitCenter || new THREE.Vector3();
-  if (!model.userData.fitBox) {
-    box.getSize(size);
-    box.getCenter(center);
-    model.userData.fitBox = box.clone();
-    model.userData.fitSize = size.clone();
-    model.userData.fitCenter = center.clone();
-  }
-  const maxDim = Math.max(size.x, size.y, size.z) || 1;
-  const scale = (1.2 / maxDim) * settings.customScale;
+  const box0 = new THREE.Box3().setFromObject(model);
+  const size = box0.getSize(new THREE.Vector3());
+  const scale = TARGET_BODY_HEIGHT / Math.max(size.y, 1e-4);
   model.scale.setScalar(scale);
-  model.rotation.set(0, settings.customRotationY, 0);
-  model.position.set(
-    settings.customXOffset - center.x * scale,
-    -box.min.y * scale + 1.05 + settings.customYOffset,
-    settings.customZOffset - center.z * scale,
-  );
+
+  // 重新算缩放后 bbox，再做"脚贴地 + XZ 居中"
+  const box1 = new THREE.Box3().setFromObject(model);
+  const center1 = box1.getCenter(new THREE.Vector3());
+  model.position.x -= center1.x;
+  model.position.z -= center1.z;
+  model.position.y -= box1.min.y;
+
+  const height = TARGET_BODY_HEIGHT;
+  return {
+    height,
+    footY: 0,
+    kneeY: height * ANCHOR_RATIOS.knee,
+    hipY: height * ANCHOR_RATIOS.hip,
+    waistY: height * ANCHOR_RATIOS.waist,
+    shoulderY: height * ANCHOR_RATIOS.shoulder,
+    neckY: height * ANCHOR_RATIOS.neck,
+    headY: height * ANCHOR_RATIOS.head,
+    topY: height * ANCHOR_RATIOS.top,
+  };
 }
 
-const AvatarDressStage = forwardRef(function AvatarDressStage({
-  settings,
-  customModelUrl,
-}, ref) {
+/** 根据 bbox 推测服装类别。简单启发式，足够大多数 demo 场景。 */
+function inferGarmentLayer(size) {
+  const h = size.y;
+  const w = Math.max(size.x, size.z);
+  const ratio = h / Math.max(w, 1e-4);
+  // 又高又窄：连衣裙 / 大衣 / 全身
+  if (ratio > 1.6) return "full";
+  // 又矮又胖：上装（外套展开、T 恤）
+  if (ratio < 0.85) return "upper";
+  // 高度比宽度略大：可能是裤子（细长但成对）也可能是上装
+  // 用绝对尺寸辅助：相对身高 < 0.45 偏上装；> 0.6 偏下装
+  if (h < 0.55) return "upper";
+  if (h > 0.7) return "lower";
+  return "upper";
+}
+
+function getSlotTransform(settings, slot) {
+  const t = settings.slotTransforms?.[slot] || {};
+  return {
+    customScale: t.customScale ?? 1,
+    customYOffset: t.customYOffset ?? 0,
+    customXOffset: t.customXOffset ?? 0,
+    customZOffset: t.customZOffset ?? 0,
+    customRotationY: t.customRotationY ?? 0,
+  };
+}
+
+/**
+ * 服装 GLB 自动锚定：
+ *   - 四个槽位分别用不同的人体锚点：上装 / 下装 / 连衣裙 / 鞋子
+ *   - 缩放到匹配身体宽度（不超出肩宽 / 腰宽）
+ *   - 上装锚定到 shoulder 高度（顶端贴近肩膀）
+ *   - 下装锚定到 waist 高度（顶端贴近腰部）
+ *   - 全身锚定到 shoulder，往下垂
+ *   - 鞋子锚定到地面，默认略向前，避免被脚踝遮住
+ *
+ * 然后叠加用户的 X/Y/Z/Scale/Rot 微调。
+ */
+function autoFitGarment(model, anchors, settings, slot = "upper") {
+  model.position.set(0, 0, 0);
+  model.rotation.set(0, 0, 0);
+  model.scale.set(1, 1, 1);
+
+  const box0 = new THREE.Box3().setFromObject(model);
+  const size = box0.getSize(new THREE.Vector3());
+
+  const layer = GARMENT_SLOTS.includes(slot) ? slot : inferGarmentLayer(size);
+  const transform = getSlotTransform(settings, layer);
+
+  // 目标宽度（约等于肩宽 / 腰宽，单位米）和顶端锚 Y
+  let targetWidth, anchorY, maxHeight, groundAlign, defaultZ;
+  if (layer === "upper") {
+    targetWidth = 0.46;
+    anchorY = anchors.shoulderY + 0.04;
+    maxHeight = 0.85;
+    groundAlign = false;
+    defaultZ = 0;
+  } else if (layer === "lower") {
+    targetWidth = 0.4;
+    anchorY = anchors.waistY + 0.02;
+    maxHeight = 1.1;
+    groundAlign = false;
+    defaultZ = 0;
+  } else if (layer === "shoes") {
+    targetWidth = 0.32;
+    anchorY = anchors.footY;
+    maxHeight = 0.22;
+    groundAlign = true;
+    defaultZ = 0.08;
+  } else {
+    targetWidth = 0.46;
+    anchorY = anchors.shoulderY + 0.04;
+    maxHeight = 1.48;
+    groundAlign = false;
+    defaultZ = 0;
+  }
+
+  // 用 max(x, z) 当作"前视宽度"
+  const planarW = Math.max(size.x, size.z, 1e-4);
+  const baseScale = targetWidth / planarW;
+
+  // 控制垂直长度，避免小物件被放大到遮住整个人台。
+  const maxScaleByH = maxHeight / Math.max(size.y, 1e-4);
+  const fitScale = Math.min(baseScale, maxScaleByH);
+
+  const scale = fitScale * transform.customScale;
+  model.scale.setScalar(scale);
+  model.rotation.y = transform.customRotationY;
+
+  // 缩放完再算 bbox
+  const box1 = new THREE.Box3().setFromObject(model);
+  const center1 = box1.getCenter(new THREE.Vector3());
+
+  model.position.x = -center1.x + transform.customXOffset;
+  model.position.z = -center1.z + defaultZ + transform.customZOffset;
+  model.position.y = groundAlign
+    ? anchorY - box1.min.y + transform.customYOffset
+    : anchorY - box1.max.y + transform.customYOffset;
+
+  model.userData.__autoFit = {
+    layer,
+    anchorY,
+    scale,
+    bbox: box1.clone(),
+  };
+}
+
+const AvatarDressStage = forwardRef(function AvatarDressStage(
+  { settings, garments = {}, customModelUrl },
+  ref,
+) {
   const mountRef = useRef(null);
   const rendererRef = useRef(null);
   const sceneRef = useRef(null);
   const cameraRef = useRef(null);
   const controlsRef = useRef(null);
-  const avatarRef = useRef(null);
-  const garmentRef = useRef(null);
-  const customRef = useRef(null);
+  const mannequinRef = useRef(null); // { group, anchors }
+  const garmentRefs = useRef({});    // slot -> { wrapper, model }
   const gridRef = useRef(null);
+  const [mannequinError, setMannequinError] = useState(null);
+  const [garmentErrors, setGarmentErrors] = useState({});
 
-  useImperativeHandle(ref, () => ({
-    snapshot() {
-      const renderer = rendererRef.current;
-      if (!renderer) return null;
-      return renderer.domElement.toDataURL("image/png");
-    },
-  }), []);
+  useImperativeHandle(
+    ref,
+    () => ({
+      snapshot() {
+        const renderer = rendererRef.current;
+        if (!renderer) return null;
+        return renderer.domElement.toDataURL("image/png");
+      },
+    }),
+    [],
+  );
 
+  // ---- 初始化 three.js 场景（仅一次） ----
   useEffect(() => {
     const mount = mountRef.current;
     if (!mount) return undefined;
 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0xf8fafc);
-    scene.fog = new THREE.Fog(0xf8fafc, 7, 14);
+    scene.fog = new THREE.Fog(0xf8fafc, 8, 18);
     sceneRef.current = scene;
 
-    const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
-    camera.position.set(3.4, 2.35, 4.2);
+    const camera = new THREE.PerspectiveCamera(38, 1, 0.05, 100);
+    camera.position.set(2.4, 1.7, 3.2);
     cameraRef.current = camera;
 
     const renderer = new THREE.WebGLRenderer({
@@ -353,18 +293,20 @@ const AvatarDressStage = forwardRef(function AvatarDressStage({
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
-    controls.target.set(0, 1.45, 0);
-    controls.minDistance = 2.4;
-    controls.maxDistance = 7.2;
+    controls.target.set(0, 1.0, 0);
+    controls.minDistance = 1.4;
+    controls.maxDistance = 7.0;
     controlsRef.current = controls;
 
-    scene.add(new THREE.HemisphereLight(0xffffff, 0xb7c2ce, 1.8));
-    const key = new THREE.DirectionalLight(0xffffff, 2.6);
-    key.position.set(4, 5, 3);
+    scene.add(new THREE.HemisphereLight(0xffffff, 0xb7c2ce, 1.6));
+    const key = new THREE.DirectionalLight(0xffffff, 2.4);
+    key.position.set(3, 4, 3);
     key.castShadow = true;
     key.shadow.mapSize.set(2048, 2048);
+    key.shadow.camera.near = 0.5;
+    key.shadow.camera.far = 10;
     scene.add(key);
-    const rim = new THREE.DirectionalLight(0xdbeafe, 1.2);
+    const rim = new THREE.DirectionalLight(0xdbeafe, 1.0);
     rim.position.set(-3, 2.4, -4);
     scene.add(rim);
 
@@ -406,106 +348,186 @@ const AvatarDressStage = forwardRef(function AvatarDressStage({
       observer.disconnect();
       controls.dispose();
       renderer.dispose();
-      mount.removeChild(renderer.domElement);
+      if (renderer.domElement.parentElement === mount) {
+        mount.removeChild(renderer.domElement);
+      }
       scene.traverse((obj) => {
         if (obj.geometry) obj.geometry.dispose?.();
         if (obj.material) {
-          if (Array.isArray(obj.material)) obj.material.forEach((m) => m.dispose?.());
-          else obj.material.dispose?.();
+          if (Array.isArray(obj.material)) {
+            obj.material.forEach((m) => m.dispose?.());
+          } else {
+            obj.material.dispose?.();
+          }
         }
       });
     };
   }, []);
 
-  useEffect(() => {
-    const scene = sceneRef.current;
-    if (!scene) return;
-    if (avatarRef.current) {
-      scene.remove(avatarRef.current);
-      disposeObject(avatarRef.current);
-    }
-    if (garmentRef.current) {
-      scene.remove(garmentRef.current);
-      disposeObject(garmentRef.current);
-    }
-
-    avatarRef.current = buildMannequin(settings);
-    garmentRef.current = buildGarment(settings);
-    scene.add(avatarRef.current);
-    scene.add(garmentRef.current);
-  }, [settings]);
-
-  useEffect(() => {
-    if (gridRef.current) gridRef.current.visible = settings.showGrid;
-  }, [settings.showGrid]);
-
+  // ---- 加载 mannequin GLB ----
   useEffect(() => {
     const scene = sceneRef.current;
     if (!scene) return undefined;
-    if (customRef.current) {
-      scene.remove(customRef.current);
-      disposeObject(customRef.current);
-      customRef.current = null;
+    const url = settings.mannequinUrl || DEFAULT_MANNEQUIN_URL;
+
+    if (mannequinRef.current) {
+      scene.remove(mannequinRef.current.group);
+      disposeObject(mannequinRef.current.group);
+      mannequinRef.current = null;
     }
-    if (!customModelUrl) return undefined;
 
     let cancelled = false;
-    const loader = new GLTFLoader();
+    setMannequinError(null);
+
+    const loader = createGltfLoader();
     loader.load(
-      customModelUrl,
+      url,
       (gltf) => {
         if (cancelled) return;
-        const wrapper = new THREE.Group();
         const model = gltf.scene;
-        const fitBox = new THREE.Box3().setFromObject(model);
-        const fitSize = new THREE.Vector3();
-        const fitCenter = new THREE.Vector3();
-        fitBox.getSize(fitSize);
-        fitBox.getCenter(fitCenter);
-        model.userData.fitBox = fitBox;
-        model.userData.fitSize = fitSize;
-        model.userData.fitCenter = fitCenter;
-        fitCustomModel(model, settings);
         model.traverse((obj) => {
           if (obj.isMesh) {
             obj.castShadow = true;
             obj.receiveShadow = true;
           }
         });
-        wrapper.add(model);
-        wrapper.userData.model = model;
-        customRef.current = wrapper;
-        scene.add(wrapper);
+        const anchors = fitMannequin(model);
+        applyBodyTint(
+          model,
+          BODY_COLORS[settings.bodyColor] || BODY_COLORS.porcelain,
+          !!settings.ghostBody,
+        );
+        scene.add(model);
+        mannequinRef.current = { group: model, anchors };
+
+        // mannequin 一加载就重新对齐已有服装
+        Object.entries(garmentRefs.current).forEach(([slot, item]) => {
+          autoFitGarment(item.model, anchors, settings, slot);
+        });
       },
       undefined,
-      () => {
-        // Experimental user assets should not break the whole stage.
+      (err) => {
+        if (cancelled) return;
+        const msg = err?.message || String(err);
+        setMannequinError(
+          msg.includes("404") || msg.includes("HTTP")
+            ? "找不到 mannequin GLB。请运行：python scripts/fetch_avatar.py"
+            : `mannequin 加载失败：${msg}`,
+        );
       },
     );
 
     return () => {
       cancelled = true;
-      if (customRef.current) {
-        scene.remove(customRef.current);
-        disposeObject(customRef.current);
-        customRef.current = null;
-      }
     };
-  }, [customModelUrl]);
+  }, [settings.mannequinUrl]);
+
+  // ---- 更新 mannequin 着色 / 半透明（不重载 GLB） ----
+  useEffect(() => {
+    if (!mannequinRef.current) return;
+    applyBodyTint(
+      mannequinRef.current.group,
+      BODY_COLORS[settings.bodyColor] || BODY_COLORS.porcelain,
+      !!settings.ghostBody,
+    );
+  }, [settings.bodyColor, settings.ghostBody]);
 
   useEffect(() => {
-    const model = customRef.current?.userData?.model;
-    if (model) fitCustomModel(model, settings);
-  }, [
-    settings.customScale,
-    settings.customYOffset,
-    settings.customXOffset,
-    settings.customZOffset,
-    settings.customRotationY,
-  ]);
+    if (gridRef.current) gridRef.current.visible = !!settings.showGrid;
+  }, [settings.showGrid]);
 
-  return <div className="avatar-stage" ref={mountRef} />;
+  // ---- 加载 / 切换 服装 GLB（四个槽位可同时存在） ----
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (!scene) return undefined;
+
+    Object.values(garmentRefs.current).forEach((item) => {
+      scene.remove(item.wrapper);
+      disposeObject(item.wrapper);
+    });
+    garmentRefs.current = {};
+    setGarmentErrors({});
+
+    let cancelled = false;
+    const entries = Object.entries(garments || {}).filter(([, garment]) => garment?.url);
+    if (!entries.length && customModelUrl) {
+      entries.push(["upper", { url: customModelUrl, label: "服装 GLB" }]);
+    }
+    if (!entries.length) return undefined;
+
+    entries.forEach(([slot, garment]) => {
+      const loader = createGltfLoader();
+      loader.load(
+        garment.url,
+        (gltf) => {
+          if (cancelled) return;
+          const wrapper = new THREE.Group();
+          wrapper.name = `garment-${slot}`;
+          const model = gltf.scene;
+          model.traverse((obj) => {
+            if (obj.isMesh) {
+              obj.castShadow = true;
+              obj.receiveShadow = true;
+            }
+          });
+          wrapper.add(model);
+          garmentRefs.current[slot] = { wrapper, model };
+          if (mannequinRef.current) {
+            autoFitGarment(model, mannequinRef.current.anchors, settings, slot);
+          }
+          scene.add(wrapper);
+        },
+        undefined,
+        (err) => {
+          if (cancelled) return;
+          const msg = err?.message || String(err);
+          setGarmentErrors((prev) => ({
+            ...prev,
+            [slot]: `${garment.label || "服装"} 加载失败：${msg}`,
+          }));
+        },
+      );
+    });
+
+    return () => {
+      cancelled = true;
+      Object.values(garmentRefs.current).forEach((item) => {
+        scene.remove(item.wrapper);
+        disposeObject(item.wrapper);
+      });
+      garmentRefs.current = {};
+    };
+  }, [garments, customModelUrl]);
+
+  // ---- 服装微调（不重载 GLB） ----
+  useEffect(() => {
+    if (!mannequinRef.current) return;
+    Object.entries(garmentRefs.current).forEach(([slot, item]) => {
+      autoFitGarment(item.model, mannequinRef.current.anchors, settings, slot);
+    });
+  }, [settings.slotTransforms]);
+
+  return (
+    <div className="avatar-stage" ref={mountRef}>
+      {mannequinError && (
+        <div className="avatar-stage-overlay">
+          <strong>3D 人台不可用</strong>
+          <p>{mannequinError}</p>
+          <p className="hint">
+            下载完成后刷新页面。也可以把任意 rigged GLB 放到{" "}
+            <code>data/samples/avatars/mannequin.glb</code> 替换。
+          </p>
+        </div>
+      )}
+      {Object.keys(garmentErrors).length > 0 && (
+        <div className="avatar-stage-toast">
+          {Object.entries(garmentErrors).map(([slot, msg]) => (
+            <div key={slot}>{msg}</div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 });
 
-export { GARMENT_PRESETS };
 export default AvatarDressStage;

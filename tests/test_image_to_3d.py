@@ -201,6 +201,15 @@ class TestPublish:
         ids = {p["id"] for p in all_resp["items"]}
         assert f"job-{job_id}" in ids
 
+        job_dir = config.OUTPUT_DIR / job_id
+        raw_dir = config.RAW_DIR / job_id
+        processed_dir = config.PROCESSED_DIR / job_id
+        assert job_dir.exists()
+        raw_dir.mkdir(parents=True, exist_ok=True)
+        processed_dir.mkdir(parents=True, exist_ok=True)
+        (raw_dir / "raw.txt").write_text("raw", encoding="utf-8")
+        (processed_dir / "processed.txt").write_text("processed", encoding="utf-8")
+
         # 4) 自定义名称/价格/分类 publish
         pr2 = client.post(
             f"/api/products/publish/{job_id}",
@@ -221,6 +230,10 @@ class TestPublish:
 
         gone = client.get(f"/api/products/job-{job_id}")
         assert gone.status_code == 404
+        assert client.get(f"/api/jobs/{job_id}").status_code == 404
+        assert not job_dir.exists()
+        assert not raw_dir.exists()
+        assert not processed_dir.exists()
 
         all_after_delete = client.get("/api/products").json()
         ids_after_delete = {p["id"] for p in all_after_delete["items"]}

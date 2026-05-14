@@ -1,0 +1,22 @@
+Mannequin sources used by this demo
+==================================
+
+This file is downloaded from the three.js examples repository:
+  https://github.com/mrdoob/three.js/tree/dev/examples/models/gltf
+
+three.js is released under the MIT License. The bundled rigged human
+models (Xbot.glb, Soldier.glb) are originally derived from Mixamo
+(Adobe) and are made available by the three.js authors for
+educational / demo purposes.
+
+If you ship this commercially, please confirm the licensing terms
+directly at https://www.mixamo.com/ and replace the file with an
+asset whose license fits your distribution channel.
+
+To swap in a different mannequin, just overwrite this file:
+  data/samples/avatars/mannequin.glb
+
+Recommended free-real-human alternatives you can download manually:
+  - Ready Player Me (https://readyplayer.me/)
+  - Mixamo X-Bot / Y-Bot (https://www.mixamo.com/)
+  - Sketchfab CC0 base meshes

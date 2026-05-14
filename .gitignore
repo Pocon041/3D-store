@@ -4,6 +4,7 @@ __pycache__/
 *$py.class
 .Python
 .venv/
+.conda/
 venv/
 env/
 ENV/

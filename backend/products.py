@@ -18,6 +18,7 @@ from typing import Any, Optional
 
 from . import config
 from .job_store import job_store
+from .local_apparel_loader import load_local_apparel_products
 from .polyhaven_loader import load_polyhaven_products
 
 
@@ -188,14 +189,16 @@ SEED_PRODUCTS: list[dict[str, Any]] = [
         "stock": 40,
         "description": (
             "支持多种材质变体的运动跑鞋，3D 视角下可清晰看到鞋面网布、"
-            "鞋底纹理与缝线工艺。配合虚拟试穿可直接预览上脚效果。"
+            "鞋底纹理与缝线工艺。鞋类不进入 2D 虚拟试穿，但可在人台 3D 换装中展示。"
         ),
         "model_url": f"{_CDN}/MaterialsVariantsShoe/glTF-Binary/MaterialsVariantsShoe.glb",
         "thumbnail_url": f"{_CDN}/MaterialsVariantsShoe/screenshot/screenshot.jpg",
         "license": "CC-BY 4.0 (Khronos)",
         "source": "khronos",
         "tags": ["鞋", "运动", "可换色"],
-        "tryonable": True,
+        "tryonable": False,
+        "avatar_dressable": True,
+        "garment_slot": "shoes",
     },
     {
         "id": "corset",
@@ -213,6 +216,8 @@ SEED_PRODUCTS: list[dict[str, Any]] = [
         "source": "khronos",
         "tags": ["服饰", "复古", "蕾丝"],
         "tryonable": True,
+        "avatar_dressable": True,
+        "garment_slot": "upper",
     },
     # ---------- 数码/玩具补充 ----------
     {
@@ -464,11 +469,7 @@ def publish_job_as_product(
 
 
 def delete_user_product(product_id: str) -> bool:
-    """从商城中移除用户自定义商品。
-
-    自定义商品由 job 记录派生，删除时只给 job.params 打标记，不直接删除
-    outputs 下的 GLB / 缩略图 / 日志，避免误删生成产物。
-    """
+    """Permanently delete a user-generated product and its job artifacts."""
     if not product_id.startswith("job-"):
         return False
     job_id = product_id.removeprefix("job-")
@@ -478,11 +479,11 @@ def delete_user_product(product_id: str) -> bool:
     if record.task_type not in {"reconstruct", "image_to_3d"}:
         return False
 
-    new_params = dict(record.params or {})
-    new_params["product_deleted"] = True
-    new_params["published"] = False
-    job_store.update_job(job_id, params=new_params)
-    return True
+    cleanup_dirs = [
+        config.RAW_DIR / job_id,
+        config.PROCESSED_DIR / job_id,
+    ]
+    return job_store.delete_job(job_id, extra_dirs=cleanup_dirs)
 
 
 def list_products() -> list[dict[str, Any]]:
@@ -490,9 +491,11 @@ def list_products() -> list[dict[str, Any]]:
     khronos = [_resolve_local_paths(p) for p in SEED_PRODUCTS]
     # 2) Poly Haven 批量下载的独立模型（由 polyhaven_loader 构造好，已是本地化路径）
     poly = load_polyhaven_products()
-    # 3) 用户作品
+    # 3) 手动导入的本地服装 GLB
+    local_apparel = load_local_apparel_products()
+    # 4) 用户作品
     users = _user_assets_as_products()
-    return khronos + poly + users
+    return khronos + poly + local_apparel + users
 
 
 def get_product(product_id: str) -> Optional[dict[str, Any]]:

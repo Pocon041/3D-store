@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import threading
 from datetime import datetime
 from pathlib import Path
@@ -31,6 +32,16 @@ def _job_file(job_id: str) -> Path:
 
 def _log_file(job_id: str) -> Path:
     return _job_dir(job_id) / "job.log"
+
+
+def _is_safe_child(path: Path, root: Path) -> bool:
+    """Return True when path resolves inside root, excluding root itself."""
+    try:
+        resolved_path = path.resolve()
+        resolved_root = root.resolve()
+    except OSError:
+        return False
+    return resolved_path != resolved_root and resolved_path.is_relative_to(resolved_root)
 
 
 class JobStore:
@@ -109,6 +120,42 @@ class JobStore:
             if r is not None:
                 records.append(r)
         return records
+
+    def delete_job(self, job_id: str, extra_dirs: list[Path] | None = None) -> bool:
+        """Permanently delete one job record and its generated artifacts.
+
+        The job record lives inside ``outputs/jobs/{job_id}/job.json``. Removing
+        that directory makes the job disappear from both job history and product
+        listing. Optional extra directories are only deleted if they resolve under
+        known runtime roots.
+        """
+        with _LOCK:
+            record = self.get_job(job_id)
+            if record is None:
+                return False
+
+            job_dir = _job_dir(job_id)
+            if not _is_safe_child(job_dir, config.OUTPUT_DIR):
+                raise RuntimeError(f"unsafe job delete path: {job_dir}")
+
+            allowed_extra_roots = [
+                config.RAW_DIR,
+                config.PROCESSED_DIR,
+                config.OUTPUT_DIR,
+            ]
+            for path in extra_dirs or []:
+                if not path.exists():
+                    continue
+                if not any(_is_safe_child(path, root) for root in allowed_extra_roots):
+                    raise RuntimeError(f"unsafe extra delete path: {path}")
+                if path.is_dir():
+                    shutil.rmtree(path)
+                else:
+                    path.unlink()
+
+            if job_dir.exists():
+                shutil.rmtree(job_dir)
+            return True
 
     def append_log(self, job_id: str, line: str) -> None:
         log_path = _log_file(job_id)

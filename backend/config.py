@@ -1,6 +1,9 @@
 """集中配置：路径、外部命令模板、质量档位。
 
 所有可能因环境变化的命令字符串都集中在这里，避免散落到多个文件。
+
+启动顺序保护：本模块在 import 时会主动尝试加载 ``scripts/.env.local``，
+避免因没用 ``scripts/start.ps1`` 启动而导致 Provider key 丢失。
 """
 from __future__ import annotations
 
@@ -9,6 +12,54 @@ from pathlib import Path
 
 # 项目根目录（aigc-3d-commerce-demo/）
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+
+def _load_env_local() -> list[str]:
+    """读取 scripts/.env.local 把变量补进 os.environ。
+
+    解析规则与 scripts/start.ps1 的 Import-DotEnv 保持一致：
+    * 空行 / `#` 注释跳过
+    * `KEY=VALUE` 格式
+    * VALUE 两端可有引号
+    * 已存在的 env var 不会被覆盖（shell 显式设置优先级最高）
+    返回成功加载的 key 列表，便于启动时打印诊断。
+    """
+    candidates = [
+        PROJECT_ROOT / "scripts" / ".env.local",
+        PROJECT_ROOT / ".env.local",
+    ]
+    loaded: list[str] = []
+    for path in candidates:
+        if not path.exists():
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        for raw in text.splitlines():
+            line = raw.strip()
+            if not line or line.startswith("#"):
+                continue
+            eq = line.find("=")
+            if eq < 1:
+                continue
+            name = line[:eq].strip()
+            value = line[eq + 1:].strip()
+            if (value.startswith('"') and value.endswith('"')) or (
+                value.startswith("'") and value.endswith("'")
+            ):
+                value = value[1:-1]
+            if name in os.environ and os.environ[name]:
+                # shell 已经显式设过，尊重原值
+                continue
+            os.environ[name] = value
+            loaded.append(name)
+        # 用第一个找到的就停
+        break
+    return loaded
+
+
+_LOADED_ENV_KEYS: list[str] = _load_env_local()
 
 # 数据目录
 DATA_DIR = PROJECT_ROOT / "data"

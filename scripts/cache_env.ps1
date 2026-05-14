@@ -23,5 +23,9 @@ Set-ProjectCacheEnv "TORCH_HOME"            ".cache\torch"
 Set-ProjectCacheEnv "PIP_CACHE_DIR"         ".cache\pip"
 Set-ProjectCacheEnv "NPM_CONFIG_CACHE"      ".cache\npm"
 Set-ProjectCacheEnv "MPLCONFIGDIR"          ".cache\matplotlib"
+Set-ProjectCacheEnv "CONDA_PKGS_DIRS"       ".cache\conda\pkgs"
+Set-ProjectCacheEnv "CONDA_ENVS_PATH"       ".conda\envs"
+Set-ProjectCacheEnv "TEMP"                  ".cache\tmp"
+Set-ProjectCacheEnv "TMP"                   ".cache\tmp"
 
 Write-Host ("[env] project cache root: {0}" -f (Join-Path $root ".cache"))

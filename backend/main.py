@@ -43,6 +43,17 @@ from .utils.file_utils import generate_job_id, save_upload_file
 
 config.ensure_runtime_dirs()
 
+# 启动横幅：把 Provider / Key 加载状态写到 stdout，便于在 logs/backend.log 一眼看到。
+# tripo_configured 同时也通过 /api/image-to-3d/providers 暴露给前端。
+print(
+    "[image3d] provider={prov} tripo_key={tk} loaded_env_keys={ek}".format(
+        prov=config.IMAGE3D_PROVIDER,
+        tk="SET" if config.TRIPO_API_KEY else "MISSING",
+        ek=",".join(config._LOADED_ENV_KEYS) or "(none)",
+    ),
+    flush=True,
+)
+
 # 注册 3D 资产的 MIME 类型，确保 model-viewer 能正确识别响应
 mimetypes.add_type("model/gltf-binary", ".glb")
 mimetypes.add_type("model/gltf+json", ".gltf")
